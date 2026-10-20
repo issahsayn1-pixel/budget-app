@@ -1256,78 +1256,142 @@ function LoginScreen() {
   );
 }
 function SyncRoot() {
-  var [ready, setReady] = React.useState(false);
-  var [useSync] = React.useState(isFirebaseConfigured());
-  var [authUser, setAuthUser] = React.useState(null);
-  var [data, setDataState] = React.useState(null);
-  var lastRemoteJSON = React.useRef(null);
-  var lastLocalWriteJSON = React.useRef(null);
+  var React = window.React;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useRef = React.useRef;
 
-  React.useEffect(function () {
-    var local = loadLocalData();
-    setDataState(local);
-    if (!useSync) setReady(true);
+  var readyState = useState(false);
+  var ready = readyState[0];
+  var setReady = readyState[1];
+
+  var useSync = isFirebaseConfigured();
+
+  var authState = useState(null);
+  var authUser = authState[0];
+  var setAuthUser = authState[1];
+
+  var dataState = useState(null);
+  var data = dataState[0];
+  var setDataState = dataState[1];
+
+  var lastSyncedJSON = useRef(null);
+  var writeTimer = useRef(null);
+  var hasReceivedRemote = useRef(false);
+
+  // Load local data on first mount (used only as a fallback if sync is off)
+  useEffect(function () {
+    var loaded = loadLocalData();
+    setDataState(loaded);
+    if (!useSync) {
+      setReady(true);
+      hasReceivedRemote.current = true;
+    }
   }, []);
 
-  React.useEffect(function () {
+  // Auth listener - always resolves ready state regardless of login status
+  useEffect(function () {
     if (!useSync) return;
-    var db = getFirestoreDb();
-    if (!db) { setReady(true); return; }
-    return firebase.auth().onAuthStateChanged(function (user) {
+    var unsub = firebase.auth().onAuthStateChanged(function (user) {
       setAuthUser(user);
       setReady(true);
     });
+    return function () { unsub(); };
   }, [useSync]);
 
-  React.useEffect(function () {
+  // Firestore live listener - applies remote changes to local state
+  // IMPORTANT: until this fires at least once, we must NOT push anything up.
+  useEffect(function () {
     if (!useSync || !authUser) return;
+
     var db = getFirestoreDb();
     var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
+
     var unsub = docRef.onSnapshot(function (snap) {
-      if (snap.exists()) {
-        var remoteData = snap.data().payload;
-        var remoteJSON = JSON.stringify(remoteData);
-        if (remoteJSON !== lastLocalWriteJSON.current) {
-          lastRemoteJSON.current = remoteJSON;
-          var migrated = migrate(remoteData);
-          setDataState(migrated);
-          saveLocalData(migrated);
+      if (snap.exists) {
+        var remote = snap.data();
+        var remotePayload = remote && remote.payload ? remote.payload : null;
+
+        if (remotePayload) {
+          var remoteString = JSON.stringify(remotePayload);
+
+          if (remoteString !== lastSyncedJSON.current) {
+            var migrated = migrate(remotePayload);
+            lastSyncedJSON.current = JSON.stringify(migrated);
+            setDataState(migrated);
+            saveLocalData(migrated);
+          }
         }
+        hasReceivedRemote.current = true;
       } else {
-        var local = loadLocalData();
-        var payload = Object.assign({}, local, { updatedAt: Date.now() });
-        lastLocalWriteJSON.current = JSON.stringify(payload);
-        docRef.set({ payload: payload });
+        // No document exists yet in the cloud at all (true first-ever use).
+        // Safe to push our current local data as the very first cloud copy.
+        var current = loadLocalData();
+        var currentString = JSON.stringify(current);
+        lastSyncedJSON.current = currentString;
+        hasReceivedRemote.current = true;
+        docRef.set({ payload: current, updatedAt: Date.now() });
       }
-    }, function (err) { console.error("Sync error:", err); });
-    return unsub;
+    }, function (err) {
+      console.error("Firestore listen error:", err);
+      hasReceivedRemote.current = true;
+    });
+
+    return function () { unsub(); };
   }, [useSync, authUser]);
 
-  React.useEffect(function () {
+  // Push local changes up to Firestore (debounced)
+  // Guarded: never push until we've heard back from the cloud at least once.
+  useEffect(function () {
     if (!data) return;
+
     saveLocalData(data);
+
     if (!useSync || !authUser) return;
-    var json = JSON.stringify(data);
-    if (json === lastRemoteJSON.current) return;
-    lastLocalWriteJSON.current = json;
-    var db = getFirestoreDb();
-    var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
-    var t = setTimeout(function () { docRef.set({ payload: data }); }, 600);
-    return function () { clearTimeout(t); };
-  }, [data]);
+    if (!hasReceivedRemote.current) return;
+
+    var currentString = JSON.stringify(data);
+    if (currentString === lastSyncedJSON.current) {
+      return;
+    }
+
+    if (writeTimer.current) {
+      clearTimeout(writeTimer.current);
+    }
+
+    writeTimer.current = setTimeout(function () {
+      var db = getFirestoreDb();
+      var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
+      lastSyncedJSON.current = currentString;
+      docRef.set({ payload: data, updatedAt: Date.now() }).catch(function (err) {
+        console.error("Firestore write error:", err);
+      });
+    }, 600);
+
+  }, [data, useSync, authUser]);
 
   function setData(updater) {
     setDataState(function (prev) {
       var next = typeof updater === "function" ? updater(prev) : updater;
-      return Object.assign({}, next, { updatedAt: Date.now() });
+      if (next && typeof next === "object") {
+        next.updatedAt = Date.now();
+      }
+      return next;
     });
   }
 
-  if (!ready || !data) return <div className="min-h-screen flex items-center justify-center text-stone-500">Loading...</div>;
-  if (useSync && !authUser) return <LoginScreen />;
-  return <App data={data} setData={setData} syncActive={useSync && !!authUser} />;
+  if (!ready || !data || (useSync && authUser && !hasReceivedRemote.current)) {
+    return React.createElement("div", { style: { padding: "40px", textAlign: "center", fontSize: "18px" } }, "Loading...");
+  }
+
+  if (useSync && !authUser) {
+    return React.createElement(LoginScreen);
+  }
+
+  return React.createElement(App, { data: data, setData: setData, syncActive: useSync && !!authUser });
 }
 
+ReactDOM.render(React.createElement(SyncRoot), document.getElementById("root"));
 ReactDOM.render(<SyncRoot />, document.getElementById("root"));
 
 </script>
