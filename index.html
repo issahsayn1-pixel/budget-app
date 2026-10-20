@@ -393,7 +393,7 @@ async function generateExcelReport(data, fromLabel, toLabel) {
     summarySheet.getCell("A" + rn).value = r[0];
     summarySheet.getCell("A" + rn).font = { bold: true };
     summarySheet.getCell("B" + rn).value = r[1];
-    summarySheet.getCell("B" + rn).font = { bold: true, color: { argb: "FF0F766E" } });
+    summarySheet.getCell("B" + rn).font = { bold: true, color: { argb: "FF0F766E" } };
   });
   summarySheet.getColumn(1).width = 28;
   summarySheet.getColumn(2).width = 20;
