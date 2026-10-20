@@ -40,10 +40,18 @@ function isFirebaseConfigured() {
 var firebaseApp = null;
 var firestoreDb = null;
 
-function getFirestoreDb() {
+function initFirebaseApp() {
   if (!isFirebaseConfigured()) return null;
   if (!firebaseApp) {
     firebaseApp = firebase.initializeApp(FIREBASE_CONFIG);
+  }
+  return firebaseApp;
+}
+
+function getFirestoreDb() {
+  if (!isFirebaseConfigured()) return null;
+  initFirebaseApp();
+  if (!firestoreDb) {
     firestoreDb = firebase.firestore();
     try { firestoreDb.enablePersistence({ synchronizeTabs: true }); } catch (e) {}
   }
@@ -1255,6 +1263,7 @@ function LoginScreen() {
     )
   );
 }
+
 function SyncRoot() {
   var React = window.React;
   var useState = React.useState;
@@ -1292,6 +1301,7 @@ function SyncRoot() {
   // Auth listener - always resolves ready state regardless of login status
   useEffect(function () {
     if (!useSync) return;
+    initFirebaseApp();
     var unsub = firebase.auth().onAuthStateChanged(function (user) {
       setAuthUser(user);
       setReady(true);
@@ -1392,7 +1402,6 @@ function SyncRoot() {
 }
 
 ReactDOM.render(React.createElement(SyncRoot), document.getElementById("root"));
-
 
 </script>
 </body>
