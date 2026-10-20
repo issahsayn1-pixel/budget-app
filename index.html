@@ -393,7 +393,7 @@ async function generateExcelReport(data, fromLabel, toLabel) {
     summarySheet.getCell("A" + rn).value = r[0];
     summarySheet.getCell("A" + rn).font = { bold: true };
     summarySheet.getCell("B" + rn).value = r[1];
-    summarySheet.getCell("B" + rn).font = { bold: true, color: { argb: "FF0F766E" } };
+    summarySheet.getCell("B" + rn).font = { bold: true, color: { argb: "FF0F766E" } });
   });
   summarySheet.getColumn(1).width = 28;
   summarySheet.getColumn(2).width = 20;
@@ -716,7 +716,7 @@ function TotalsSidebar(props) {
   }
   function handleTransfer() {
     var amt = parseFloat(transferAmt); if (!amt || fromCat === toCat) return;
-    setData(Object.assign({}, data, { transfers: data.transfers.concat([{ id: uid(), date: todayISO(), fromCategory: fromCat, toCategory: toCat, amount: amt, note: transferNote }]) }));
+    setData(Object.assign({}, data, { transfers: data.transfers.concat([{ id: uid(), date: todayISO(), fromCategory: fromCat, toCategory: toCategory, amount: amt, note: transferNote }]) }));
     setTransferAmt(""); setTransferNote("");
   }
   function handlePresentUsage() {
@@ -1287,8 +1287,26 @@ function SyncRoot() {
   var lastSyncedJSON = useRef(null);
   var writeTimer = useRef(null);
   var hasReceivedRemote = useRef(false);
+  var forceReadyTimer = useRef(null);
 
-  // Load local data on first mount (used only as a fallback if sync is off)
+  // SAFETY: force ready after 8 seconds if cloud is slow or unreachable
+  useEffect(function () {
+    if (forceReadyTimer.current) clearTimeout(forceReadyTimer.current);
+    if (!useSync || !authUser) {
+      hasReceivedRemote.current = true;
+      return;
+    }
+    if (hasReceivedRemote.current) return;
+    forceReadyTimer.current = setTimeout(function () {
+      console.log("[BudgetApp] Cloud response timeout - proceeding with local data.");
+      hasReceivedRemote.current = true;
+      // Trigger a re-render by touching state slightly
+      setDataState(function (prev) { return prev ? Object.assign({}, prev) : prev; });
+    }, 8000);
+    return function () { if (forceReadyTimer.current) clearTimeout(forceReadyTimer.current); };
+  }, [useSync, authUser]);
+
+  // Load local data on first mount (used as fallback or standalone)
   useEffect(function () {
     var loaded = loadLocalData();
     setDataState(loaded);
@@ -1313,11 +1331,16 @@ function SyncRoot() {
   // IMPORTANT: until this fires at least once, we must NOT push anything up.
   useEffect(function () {
     if (!useSync || !authUser) return;
+    // Skip if already received (maybe from a previous session or timeout)
+    if (hasReceivedRemote.current) return;
 
     var db = getFirestoreDb();
+    if (!db) { hasReceivedRemote.current = true; return; }
+
     var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
 
     var unsub = docRef.onSnapshot(function (snap) {
+      console.log("[BudgetApp] Firestore snapshot received:", snap.exists ? "document exists" : "no document");
       if (snap.exists) {
         var remote = snap.data();
         var remotePayload = remote && remote.payload ? remote.payload : null;
@@ -1326,24 +1349,31 @@ function SyncRoot() {
           var remoteString = JSON.stringify(remotePayload);
 
           if (remoteString !== lastSyncedJSON.current) {
-            var migrated = migrate(remotePayload);
-            lastSyncedJSON.current = JSON.stringify(migrated);
-            setDataState(migrated);
-            saveLocalData(migrated);
+            try {
+              var migrated = migrate(remotePayload);
+              lastSyncedJSON.current = JSON.stringify(migrated);
+              setDataState(migrated);
+              saveLocalData(migrated);
+            } catch (err) {
+              console.error("[BudgetApp] Error migrating remote data:", err);
+            }
           }
         }
         hasReceivedRemote.current = true;
       } else {
         // No document exists yet in the cloud at all (true first-ever use).
         // Safe to push our current local data as the very first cloud copy.
+        console.log("[BudgetApp] No cloud document found - creating first copy.");
         var current = loadLocalData();
         var currentString = JSON.stringify(current);
         lastSyncedJSON.current = currentString;
         hasReceivedRemote.current = true;
-        docRef.set({ payload: current, updatedAt: Date.now() });
+        docRef.set({ payload: current, updatedAt: Date.now() }).catch(function (err) {
+          console.error("[BudgetApp] Error creating first cloud copy:", err);
+        });
       }
     }, function (err) {
-      console.error("Firestore listen error:", err);
+      console.error("[BudgetApp] Firestore listen error:", err);
       hasReceivedRemote.current = true;
     });
 
@@ -1351,7 +1381,7 @@ function SyncRoot() {
   }, [useSync, authUser]);
 
   // Push local changes up to Firestore (debounced)
-  // Guarded: never push until we've heard back from the cloud at least once.
+  // Guarded: never push until we've heard back from the cloud at least once (or timed out).
   useEffect(function () {
     if (!data) return;
 
@@ -1371,10 +1401,11 @@ function SyncRoot() {
 
     writeTimer.current = setTimeout(function () {
       var db = getFirestoreDb();
+      if (!db) return;
       var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
       lastSyncedJSON.current = currentString;
       docRef.set({ payload: data, updatedAt: Date.now() }).catch(function (err) {
-        console.error("Firestore write error:", err);
+        console.error("[BudgetApp] Firestore write error:", err);
       });
     }, 600);
 
