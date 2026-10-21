@@ -21,6 +21,9 @@
 <div id="root"></div>
 <script type="text/babel">
 
+/* =======================================================================
+   FIREBASE CONFIG - sync is now OPTIONAL. The app works fully without it.
+   ======================================================================= */
 var FIREBASE_CONFIG = {
   apiKey: "AIzaSyCZbd7i-p3ZuTvJkHGCxXEoUkQMErLBeBA",
   authDomain: "my-budjet-app-85a37.firebaseapp.com",
@@ -50,7 +53,7 @@ function getFirestoreDb() {
   initFirebaseApp();
   if (!firestoreDb) {
     firestoreDb = firebase.firestore();
-    try { firestoreDb.enablePersistence({ synchronizeTabs: true }); } catch(e) {}
+    try { firestoreDb.settings({ experimentalAutoDetectLongPolling: true }); } catch (e) {}
   }
   return firestoreDb;
 }
@@ -58,9 +61,11 @@ function getFirestoreDb() {
 var SYNC_COLLECTION = "budgetApp";
 var SYNC_DOC_ID = "sharedData";
 
+/* ============================ CONSTANTS ============================ */
+
 var DATA_VERSION = 10;
 var STORAGE_KEY = "budgetApp_data_v10";
-var LEGACY_KEYS = ["budgetApp_data_v9","budgetApp_data_v8","budgetApp_data_v7","budgetApp_data_v6","budgetApp_data_v5","budgetApp_data_v4","budgetApp_data_v3","budgetApp_data_v2","budgetApp_data_v1","budgetApp_data"];
+var LEGACY_DATA_KEYS = ["budgetApp_data_v9","budgetApp_data_v8","budgetApp_data_v7","budgetApp_data_v6","budgetApp_data_v5","budgetApp_data_v4","budgetApp_data_v3","budgetApp_data_v2","budgetApp_data_v1","budgetApp_data"];
 
 var DEFAULT_CATEGORY_NAMES = [
   "Living Expenses","Fiancee","Family","Flexible Reserve","House Construction Savings",
@@ -83,226 +88,1397 @@ var CATEGORY_TYPE_BY_NAME = {
 };
 
 var QUOTES = [
-  { text:"The goal isn't more money. The goal is living life on your terms.", author:"Chris Brogan" },
-  { text:"A budget is telling your money where to go instead of wondering where it went.", author:"Dave Ramsey" },
-  { text:"Do not save what is left after spending, but spend what is left after saving.", author:"Warren Buffett" },
-  { text:"The habit of saving is itself an education.", author:"T.T. Munger" },
-  { text:"Financial freedom is available to those who learn about it and work for it.", author:"Robert Kiyosaki" },
-  { text:"It's not your salary that makes you rich, it's your spending habits.", author:"Charles A. Jaffe" },
-  { text:"Beware of little expenses; a small leak will sink a great ship.", author:"Benjamin Franklin" },
-  { text:"Never spend your money before you have earned it.", author:"Thomas Jefferson" },
-  { text:"Money is a terrible master but an excellent servant.", author:"P.T. Barnum" },
-  { text:"Wealth consists not in having great possessions, but in having few wants.", author:"Epictetus" },
-  { text:"The stock market is a device for transferring money from the impatient to the patient.", author:"Warren Buffett" },
-  { text:"An investment in knowledge pays the best interest.", author:"Benjamin Franklin" },
-  { text:"Formal education will make you a living; self-education will make you a fortune.", author:"Jim Rohn" },
-  { text:"Rich people have small TVs and big libraries, poor people have small libraries and big TVs.", author:"Zig Ziglar" },
-  { text:"You must gain control over your money or the lack of it will forever control you.", author:"Dave Ramsey" },
-  { text:"It's not how much money you make, but how much money you keep.", author:"Robert Kiyosaki" },
-  { text:"The real measure of your wealth is how much you'd be worth if you lost all your money.", author:"Anonymous" },
-  { text:"Every time you borrow money, you're robbing your future self.", author:"Nathan W. Morris" },
-  { text:"Discipline is the bridge between goals and accomplishment.", author:"Jim Rohn" },
-  { text:"Someone's sitting in the shade today because someone planted a tree long ago.", author:"Warren Buffett" },
-  { text:"Compound interest is the eighth wonder of the world.", author:"Albert Einstein" },
-  { text:"The price of anything is the amount of life you exchange for it.", author:"Henry David Thoreau" },
-  { text:"If you buy things you do not need, soon you will have to sell things you need.", author:"Warren Buffett" },
-  { text:"Too many people spend money they haven't earned to buy things they don't want.", author:"Will Rogers" },
-  { text:"A wise person should have money in their head, but not in their heart.", author:"Jonathan Swift" },
-  { text:"The avenue to greatness is often simplicity.", author:"Robert Kiyosaki" },
-  { text:"Money grows on the tree of persistence.", author:"Japanese Proverb" },
-  { text:"Small amounts saved consistently build large fortunes over time.", author:"Anonymous" }
+  { text: "The goal isn't more money. The goal is living life on your terms.", author: "Chris Brogan" },
+  { text: "A budget is telling your money where to go instead of wondering where it went.", author: "Dave Ramsey" },
+  { text: "Do not save what is left after spending, but spend what is left after saving.", author: "Warren Buffett" },
+  { text: "The habit of saving is itself an education.", author: "T.T. Munger" },
+  { text: "Financial freedom is available to those who learn about it and work for it.", author: "Robert Kiyosaki" },
+  { text: "It's not your salary that makes you rich, it's your spending habits.", author: "Charles A. Jaffe" },
+  { text: "Beware of little expenses; a small leak will sink a great ship.", author: "Benjamin Franklin" },
+  { text: "Never spend your money before you have earned it.", author: "Thomas Jefferson" },
+  { text: "Money is a terrible master but an excellent servant.", author: "P.T. Barnum" },
+  { text: "Wealth consists not in having great possessions, but in having few wants.", author: "Epictetus" },
+  { text: "The stock market is a device for transferring money from the impatient to the patient.", author: "Warren Buffett" },
+  { text: "An investment in knowledge pays the best interest.", author: "Benjamin Franklin" },
+  { text: "Formal education will make you a living; self-education will make you a fortune.", author: "Jim Rohn" },
+  { text: "Rich people have small TVs and big libraries, poor people have small libraries and big TVs.", author: "Zig Ziglar" },
+  { text: "You must gain control over your money or the lack of it will forever control you.", author: "Dave Ramsey" },
+  { text: "It's not how much money you make, but how much money you keep.", author: "Robert Kiyosaki" },
+  { text: "The real measure of your wealth is how much you'd be worth if you lost all your money.", author: "Anonymous" },
+  { text: "Every time you borrow money, you're robbing your future self.", author: "Nathan W. Morris" },
+  { text: "Discipline is the bridge between goals and accomplishment.", author: "Jim Rohn" },
+  { text: "Someone's sitting in the shade today because someone planted a tree long ago.", author: "Warren Buffett" },
+  { text: "Compound interest is the eighth wonder of the world.", author: "Albert Einstein" },
+  { text: "The price of anything is the amount of life you exchange for it.", author: "Henry David Thoreau" },
+  { text: "If you buy things you do not need, soon you will have to sell things you need.", author: "Warren Buffett" },
+  { text: "Too many people spend money they haven't earned to buy things they don't want.", author: "Will Rogers" },
+  { text: "A wise person should have money in their head, but not in their heart.", author: "Jonathan Swift" },
+  { text: "The avenue to greatness is often simplicity.", author: "Robert Kiyosaki" },
+  { text: "Money grows on the tree of persistence.", author: "Japanese Proverb" },
+  { text: "Small amounts saved consistently build large fortunes over time.", author: "Anonymous" }
 ];
+
+/* ============================ HELPERS ============================ */
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function todayISO() { return new Date().toISOString().slice(0,10); }
 
 function currentMonthLabel() {
   var d = new Date();
-  var m = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  return m[d.getMonth()] + " " + d.getFullYear();
+  var months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  return months[d.getMonth()] + " " + d.getFullYear();
 }
 
 function monthLabelToIndex(label) {
-  var m = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  var p = label.split(" ");
-  return parseInt(p[1],10)*12 + m.indexOf(p[0]);
+  var months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var parts = label.split(" ");
+  var mi = months.indexOf(parts[0]);
+  var y = parseInt(parts[1], 10);
+  return y * 12 + mi;
 }
 
 function sortedMonthLabels(history) {
-  var s={}; (history||[]).forEach(function(h){ s[h.monthLabel]=true; });
-  var l=Object.keys(s);
-  l.sort(function(a,b){return monthLabelToIndex(a)-monthLabelToIndex(b);});
-  return l;
+  var set = {};
+  (history || []).forEach(function (h) { set[h.monthLabel] = true; });
+  var labels = Object.keys(set);
+  labels.sort(function (a, b) { return monthLabelToIndex(a) - monthLabelToIndex(b); });
+  return labels;
 }
-function monthLabelToDateRange(label){
-  var m=["January","February","March","April","May","June","July","August","September","October","November","December"];
-  var p=label.split(" "); var mi=m.indexOf(p[0]); var y=parseInt(p[1],10);
-  return {start:new Date(y,mi,1), end:new Date(y,mi+1,0)};
+
+function monthLabelToDateRange(label) {
+  var months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  var parts = label.split(" ");
+  var mi = months.indexOf(parts[0]);
+  var y = parseInt(parts[1], 10);
+  var start = new Date(y, mi, 1);
+  var end = new Date(y, mi + 1, 0);
+  return { start: start, end: end };
 }
-function dateInRange(ds,fl,tl){var d=new Date(ds);var r1=monthLabelToDateRange(fl),r2=monthLabelToDateRange(tl);return d>=r1.start&&d<=r2.end;}
-function filterHistoryByRange(history,fl,tl){var fi=monthLabelToIndex(fl),ti=monthLabelToIndex(tl);return(history||[]).filter(function(h){var i=monthLabelToIndex(h.monthLabel);return i>=fi&&i<=ti;});}
-function getDailyQuote(){var s=new Date(2024,0,1),n=new Date(),d=Math.floor((n-s)/864e5);return QUOTES[((d%QUOTES.length)+QUOTES.length)%QUOTES.length];}
-function defaultTypeForName(n){return CATEGORY_TYPE_BY_NAME[n]||"other";}
-function makeCategory(name){
-  var oi=name==="Other Income / Investment Returns";
-  return{id:uid(),name:name,method:"percentage",type:defaultTypeForName(name),percent:0,fixedAmount:0,amount:0,notes:"",included:true,
-    sources:{salary:!oi,business:false,investment:false,bonus:false,other:oi}};
+
+function dateInRange(dateStr, fromLabel, toLabel) {
+  var d = new Date(dateStr);
+  var r1 = monthLabelToDateRange(fromLabel);
+  var r2 = monthLabelToDateRange(toLabel);
+  return d >= r1.start && d <= r2.end;
 }
-function defaultTemplate(){return DEFAULT_CATEGORY_NAMES.map(makeCategory);}
-function freshData(){
-  return{version:DATA_VERSION,ownerName:"",template:defaultTemplate(),history:[],adjustments:[],transfers:[],withdrawals:[],
-    currentMonth:{salary:0,salaryInput:"",presentUsageAdded:0,categories:defaultTemplate(),monthLabel:currentMonthLabel()},updatedAt:Date.now()};
+
+function filterHistoryByRange(history, fromLabel, toLabel) {
+  var fi = monthLabelToIndex(fromLabel);
+  var ti = monthLabelToIndex(toLabel);
+  return (history || []).filter(function (h) {
+    var idx = monthLabelToIndex(h.monthLabel);
+    return idx >= fi && idx <= ti;
+  });
 }
-function loadLegacyData(){
-  for(var i=0;i<LEGACY_KEYS.length;i++){var r=localStorage.getItem(LEGACY_KEYS[i]);if(r)try{return JSON.parse(r)}catch(e){}}
-  var t=localStorage.getItem("budgetApp_template_v1"),h=localStorage.getItem("budgetApp_history_v1");
-  if(t||h)try{return{version:1,template:t?JSON.parse(t):defaultTemplate(),history:h?JSON.parse(h):[]}}catch(e){}
+
+function getDailyQuote() {
+  var start = new Date(2024, 0, 1);
+  var now = new Date();
+  var days = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  var index = ((days % QUOTES.length) + QUOTES.length) % QUOTES.length;
+  return QUOTES[index];
+}
+
+function defaultTypeForName(name) {
+  return CATEGORY_TYPE_BY_NAME[name] || "other";
+}
+
+function makeCategory(name) {
+  var isOtherIncome = name === "Other Income / Investment Returns";
+  return {
+    id: uid(),
+    name: name,
+    method: "percentage",
+    type: defaultTypeForName(name),
+    percent: 0,
+    fixedAmount: 0,
+    amount: 0,
+    notes: "",
+    included: true,
+    sources: {
+      salary: !isOtherIncome,
+      business: false,
+      investment: false,
+      bonus: false,
+      other: isOtherIncome
+    }
+  };
+}
+
+function defaultTemplate() {
+  return DEFAULT_CATEGORY_NAMES.map(function (n) { return makeCategory(n); });
+}
+
+function freshData() {
+  return {
+    version: DATA_VERSION,
+    ownerName: "",
+    template: defaultTemplate(),
+    history: [],
+    adjustments: [],
+    transfers: [],
+    withdrawals: [],
+    currentMonth: {
+      salary: 0,
+      salaryInput: "",
+      presentUsageAdded: 0,
+      categories: defaultTemplate(),
+      monthLabel: currentMonthLabel()
+    },
+    updatedAt: Date.now()
+  };
+}
+
+function loadLegacyData() {
+  for (var i = 0; i < LEGACY_DATA_KEYS.length; i++) {
+    var raw = localStorage.getItem(LEGACY_DATA_KEYS[i]);
+    if (raw) { try { return JSON.parse(raw); } catch (e) {} }
+  }
+  var t = localStorage.getItem("budgetApp_template_v1");
+  var h = localStorage.getItem("budgetApp_history_v1");
+  if (t || h) {
+    try {
+      return { version: 1, template: t ? JSON.parse(t) : defaultTemplate(), history: h ? JSON.parse(h) : [] };
+    } catch (e) {}
+  }
   return null;
 }
-function migrate(d){
-  if(!d)return freshData();var data=Object.assign({},d);
-  if(!data.version)data.version=1;if(data.ownerName===undefined)data.ownerName="";
-  if(!data.template)data.template=defaultTemplate();if(!data.history)data.history=[];
-  if(!data.adjustments)data.adjustments=[];if(!data.transfers)data.transfers=[];if(!data.withdrawals)data.withdrawals=[];
-  if(!data.currentMonth)data.currentMonth={salary:0,salaryInput:"",presentUsageAdded:0,categories:defaultTemplate(),monthLabel:currentMonthLabel()};
-  if(data.currentMonth.presentUsageAdded===undefined)data.currentMonth.presentUsageAdded=0;
-  if(data.currentMonth.salaryInput===undefined)data.currentMonth.salaryInput=String(data.currentMonth.salary||"");
-  function fixList(list){return(list||[]).map(function(c){
-    var o=Object.assign({},c);
-    if(!o.id)o.id=uid();if(!o.method)o.method="percentage";
-    if(o.percent===undefined)o.percent=0;if(o.fixedAmount===undefined)o.fixedAmount=0;
-    if(o.amount===undefined)o.amount=0;if(o.notes===undefined)o.notes="";
-    if(o.included===undefined)o.included=true;
-    if(!o.sources)o.sources={salary:true,business:false,investment:false,bonus:false,other:false};
-    if(!o.type)o.type=defaultTypeForName(o.name);
-    if(SAVINGS_NAMES.indexOf(o.name)!==-1)o.type="savings";if(o.name==="Personal Learning")o.type="personalInvestment";
-    return o;
-  });}
-  data.template=fixList(data.template);data.currentMonth.categories=fixList(data.currentMonth.categories);
-  data.history=(data.history||[]).map(function(h){return Object.assign({},h,{categories:fixList(h.categories)});});
-  data.withdrawals=(data.withdrawals||[]).map(function(w){var ww=Object.assign({},w);delete ww.applied;delete ww.appliedMonthLabel;delete ww.carriedFromPresentUsage;if(!ww.monthLabel)ww.monthLabel=data.currentMonth.monthLabel;return ww;});
-  data.version=DATA_VERSION;if(!data.updatedAt)data.updatedAt=Date.now();return data;
-}
-function loadLocalData(){
-  try{var r=localStorage.getItem(STORAGE_KEY);if(r)return migrate(JSON.parse(r));var lg=loadLegacyData();if(lg)return migrate(lg);}catch(e){}
-  return freshData();
-}
-function saveLocalData(d){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(d))}catch(e){console.error("Save error:",e)}}
 
-function recalcForSalary(categories,salary){return categories.map(function(c){if(c.method==="fixed")return Object.assign({},c,{amount:c.fixedAmount});if(c.method==="hybrid")return Object.assign({},c,{amount:c.fixedAmount+salary*(c.percent/100)});return Object.assign({},c,{amount:salary*(c.percent/100)});});}
-function aggregateTotals(history,adj,trans,wds){var t={};
-  function add(n,a){if(!t[n])t[n]=0;t[n]+=a;}
-  (history||[]).forEach(function(h){(h.categories||[]).forEach(function(c){if(c.included)add(c.name,c.amount);});});
-  (adj||[]).forEach(function(a){add(a.categoryName,a.amount);});
-  (trans||[]).forEach(function(t){add(t.fromCategory,-t.amount);add(t.toCategory,t.amount);});
-  (wds||[]).forEach(function(w){add(w.fromCategory,-w.amount);});return t;}
-function applyWithdrawal(data,fromCat,amt,note){var w={id:uid(),date:todayISO(),monthLabel:data.currentMonth.monthLabel,fromCategory:fromCat,amount:amt,note:note||""};var ns=data.currentMonth.salary+amt;return Object.assign({},data,{withdrawals:data.withdrawals.concat([w]),currentMonth:Object.assign({},data.currentMonth,{presentUsageAdded:data.currentMonth.presentUsageAdded+amt,salary:ns,categories:recalcForSalary(data.currentMonth.categories,ns)})});}
-function undoWithdrawalEffect(data,w){var ns=data.currentMonth.salary-w.amount;return Object.assign({},data,{withdrawals:data.withdrawals.filter(function(x){return x.id!==w.id}),currentMonth:Object.assign({},data.currentMonth,{presentUsageAdded:data.currentMonth.presentUsageAdded-w.amount,salary:ns,categories:recalcForSalary(data.currentMonth.categories,ns)})});}
-function applyEditedWithdrawal(data,w,fc,na,nn){return applyWithdrawal(undoWithdrawalEffect(data,w),fc,na,nn);}
+function migrate(d) {
+  if (!d) return freshData();
+  var data = Object.assign({}, d);
+  if (!data.version) data.version = 1;
+  if (data.ownerName === undefined) data.ownerName = "";
+  if (!data.template) data.template = defaultTemplate();
+  if (!data.history) data.history = [];
+  if (!data.adjustments) data.adjustments = [];
+  if (!data.transfers) data.transfers = [];
+  if (!data.withdrawals) data.withdrawals = [];
+  if (!data.currentMonth) {
+    data.currentMonth = { salary: 0, salaryInput: "", presentUsageAdded: 0, categories: defaultTemplate(), monthLabel: currentMonthLabel() };
+  }
+  if (data.currentMonth.presentUsageAdded === undefined) data.currentMonth.presentUsageAdded = 0;
+  if (data.currentMonth.salaryInput === undefined) data.currentMonth.salaryInput = String(data.currentMonth.salary || "");
 
-async function generateExcelReport(data,fromL,toL){
-  var wb=new ExcelJS.Workbook();var fh=filterHistoryByRange(data.history,fromL,toL);
-  function sb(t){var s=0;fh.forEach(function(h){h.categories.forEach(function(c){if(c.included&&c.type===t)s+=c.amount;});});return s;}
-  var ts=fh.reduce(function(s,h){return s+h.salary;},0);
-  var ss=wb.addWorksheet("Summary");ss.getCell("A1").value="Financial Freedom Report";ss.getCell("A1").font={bold:true,size:16,color:{argb:"FF0F766E"}};ss.getCell("A2").value="Owner: "+(data.ownerName||"N/A");ss.getCell("A3").value="Period: "+fromL+" to "+toL;ss.getCell("A4").value="Generated: "+new Date().toLocaleString();
-  [["Total Salary",ts],["Total Expenses",sb("expense")],["Total Savings",sb("savings")],["Total Investments",sb("investment")],["Total Personal Investments",sb("personalInvestment")],["Total Other Income",sb("income")],["Months Included",fh.length]].forEach(function(r,i){var rn=6+i;ss.getCell("A"+rn).value=r[0];ss.getCell("A"+rn).font={bold:true};ss.getCell("B"+rn).value=r[1];ss.getCell("B"+rn).font={bold:true,color:{argb:"FF0F766E"}};});ss.getColumn(1).width=28;ss.getColumn(2).width=20;
-  function bcs(title,tf,ch){var sh=wb.addWorksheet(title);sh.getColumn(1).width=30;sh.getColumn(2).width=16;sh.getColumn(3).width=40;var row=1;var b=sh.getCell("A"+row);b.value=title+" - Grand Total: $"+sb(tf).toFixed(2);b.font={bold:true,size:14,color:{argb:"FFFFFFFF"}};b.fill={type:"pattern",pattern:"solid",fgColor:{argb:ch}};sh.mergeCells("A"+row+":C"+row);row+=2;var cn={};fh.forEach(function(h){h.categories.forEach(function(c){if(c.included&&c.type===tf)cn[c.name]=true;})});Object.keys(cn).forEach(function(name){var sub=0;fh.forEach(function(h){h.categories.forEach(function(c){if(c.name===name&&c.included&&c.type===tf)sub+=c.amount;})});var hc=sh.getCell("A"+row);hc.value=name+" - Subtotal: $"+sub.toFixed(2);hc.font={bold:true,color:{argb:ch}};sh.mergeCells("A"+row+":C"+row);row++;sh.getCell("A"+row).value="Month";sh.getCell("B"+row).value="Amount ($)";sh.getCell("C"+row).value="Notes";sh.getRow(row).font={bold:true};row++;fh.forEach(function(h){h.categories.forEach(function(c){if(c.name===name&&c.included&&c.type===tf){sh.getCell("A"+row).value=h.monthLabel;sh.getCell("B"+row).value=c.amount;sh.getCell("C"+row).value=c.notes||"";row++}});row++;});}
-  bcs("Expenses","expense","FF0F766E");bcs("Savings","savings","FF0D9488");bcs("Investments","investment","FFCA8A04");bcs("Personal Investments","personalInvestment","FF7E22CE");bcs("Other Income","income","FF57534E");
-  function bls(title,items,cols){var sh=wb.addWorksheet(title);var h=sh.getCell("A1");h.value=title;h.font={bold:true,size:14,color:{argb:"FFFFFFFF"}};h.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FF334155"}};sh.mergeCells("A1:"+String.fromCharCode(64+cols.length)+"1");cols.forEach(function(c,i){sh.getCell(2,i+1).value=c.header;sh.getCell(2,i+1).font={bold:true};sh.getColumn(i+1).width=c.width||18;});var r=3;items.forEach(function(it){cols.forEach(function(c,i){sh.getCell(r,i+1).value=it[c.key]});r++;});}
-  bls("Adjustments",data.adjustments.filter(function(a){return dateInRange(a.date,fromL,toL)}),[{header:"Date",key:"date"},{header:"Category",key:"categoryName",width:26},{header:"Amount",key:"amount"},{header:"Note",key:"note",width:40}]);
-  bls("Transfers",data.transfers.filter(function(t){return dateInRange(t.date,fromL,toL)}),[{header:"Date",key:"date"},{header:"From",key:"fromCategory",width:26},{header:"To",key:"toCategory",width:26},{header:"Amount",key:"amount"},{header:"Note",key:"note",width:40}]);
-  bls("Present Usage Withdrawals",data.withdrawals.filter(function(w){return dateInRange(w.date,fromL,toL)}),[{header:"Date",key:"date"},{header:"Month",key:"monthLabel"},{header:"From",key:"fromCategory",width:26},{header:"Amount",key:"amount"},{header:"Note",key:"note",width:40}]);
-  var buf=await wb.xlsx.writeBuffer();var blob=new Blob([buf],{type:"application/octet-stream"});var url=URL.createObjectURL(blob);var a=document.createElement("a");a.href=url;a.download="Financial_Freedom_Report_"+fromL.replace(" ","_")+"_to_"+toL.replace(" ","_")+".xlsx";document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  function fixCategoryList(list) {
+    return (list || []).map(function (c) {
+      var cat = Object.assign({}, c);
+      if (!cat.id) cat.id = uid();
+      if (!cat.method) cat.method = "percentage";
+      if (cat.percent === undefined) cat.percent = 0;
+      if (cat.fixedAmount === undefined) cat.fixedAmount = 0;
+      if (cat.amount === undefined) cat.amount = 0;
+      if (cat.notes === undefined) cat.notes = "";
+      if (cat.included === undefined) cat.included = true;
+      if (!cat.sources) cat.sources = { salary: true, business: false, investment: false, bonus: false, other: false };
+      if (!cat.type) cat.type = defaultTypeForName(cat.name);
+      if (SAVINGS_NAMES.indexOf(cat.name) !== -1) cat.type = "savings";
+      if (cat.name === "Personal Learning") cat.type = "personalInvestment";
+      return cat;
+    });
+  }
+
+  data.template = fixCategoryList(data.template);
+  data.currentMonth.categories = fixCategoryList(data.currentMonth.categories);
+  data.history = (data.history || []).map(function (h) { return Object.assign({}, h, { categories: fixCategoryList(h.categories) }); });
+  data.withdrawals = (data.withdrawals || []).map(function (w) {
+    var ww = Object.assign({}, w);
+    delete ww.applied; delete ww.appliedMonthLabel; delete ww.carriedFromPresentUsage;
+    if (!ww.monthLabel) ww.monthLabel = data.currentMonth.monthLabel;
+    return ww;
+  });
+
+  data.version = DATA_VERSION;
+  if (!data.updatedAt) data.updatedAt = Date.now();
+  return data;
 }
 
-function useChartInstance(ref,config,deps){var cr=React.useRef(null);var dk=JSON.stringify(deps);React.useEffect(function(){if(!ref.current)return;if(cr.current)cr.current.destroy();cr.current=new Chart(ref.current,config);return function(){if(cr.current)cr.current.destroy();}},[dk]);}
-
-function QuoteBanner(){var q=getDailyQuote();return(<div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-amber-600 text-white px-4 py-3 rounded-lg mb-4 shadow"><p className="italic text-sm md:text-base">"{q.text}"</p><p className="text-xs md:text-sm mt-1 text-amber-100">- {q.author}</p></div>);}
-function Footer(){return(<footer className="text-center text-xs text-stone-400 py-6 mt-8 border-t border-stone-200">Designed and Developed by Electrical Engineer Mohamad Hussein Ali Issa</footer>);}
-function Header(props){var tabs=[{key:"main",label:"Monthly Allocation"},{key:"dashboard",label:"Dashboard and Totals"},{key:"progress",label:"Progress Chart"},{key:"settings",label:"Settings"}];return(<div className="flex flex-wrap items-center justify-between gap-2 mb-4"><div className="flex flex-wrap gap-2">{tabs.map(function(t){return(<button key={t.key}onClick=function(){props.setView(t.key)}className={"px-4 py-2 rounded-lg font-semibold text-sm "+(props.view===t.key?"bg-emerald-700 text-white":"bg-white text-emerald-800 border border-emerald-200")}>{t.label}</button>);})}</div><div className={"text-xs px-3 py-1 rounded-full "+(props.syncActive?"bg-teal-100 text-teal-800":"bg-stone-100 text-stone-500")}>{props.syncActive?"Synced across devices":"Saved on this device only"}</div></div>);}
-function MonthChangeNotice(props){var data=props.data,setData=props.setData;function hy(){var ar={id:uid(),date:todayISO(),monthLabel:data.currentMonth.monthLabel,salary:data.currentMonth.salary,categories:data.currentMonth.categories};var fc=recalcForSalary(data.template.map(function(c){return Object.assign({},c)}),0);setData(Object.assign({},data,{history:data.history.concat([ar]),currentMonth:{salary:0,salaryInput:"",presentUsageAdded:0,categories:fc,monthLabel:currentMonthLabel()}}));props.onDismiss();}return(<div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-lg p-4 mb-4 flex flex-wrap items-center justify-between gap-3"><div>A new month has started but {data.currentMonth.monthLabel} still has unarchived data. Archive it now and start fresh?</div><div className="flex gap-2"><button onClick={hy}className="bg-emerald-700 text-white px-3 py-1 rounded">Yes, Archive</button><button onClick={props.onDismiss}className="bg-white border border-stone-300 px-3 py-1 rounded">Not Yet</button></div></div>);}
-function AllocationTable(props){var cats=props.categories,oc=props.onChange,sm=props.showMethod,sal=props.salary;
-  function ur(id,p){oc(cats.map(function(c){if(c.id!==id)return c;var m=Object.assign({},c,p);if(m.percent!==undefined&&m.method!=="fixed")m.amount=sal*(m.percent/100)+(m.method==="hybrid"?m.fixedAmount:0);if(m.amount!==undefined&&m.method==="percentage")m.percent=sal>0?(m.amount/sal)*100:0;if(m.fixedAmount!==undefined){if(m.method==="fixed")m.amount=m.fixedAmount;if(m.method==="hybrid")m.amount=m.fixedAmount+sal*(m.percent/100)}if(m.method!==undefined){if(m.method==="fixed")m.amount=m.fixedAmount;else if(m.method==="hybrid")m.amount=m.fixedAmount+sal*(m.percent/100);else m.amount=sal*(m.percent/100)}return m;}));}
-  function us(id,k,v){oc(cats.map(function(c){if(c.id!==id)return c;var s=Object.assign({},c.sources);s[k]=v;return Object.assign({},c,{sources:s});}));}
-  function mv(id,d){var idx=cats.findIndex(function(c){return c.id===id}),ni=idx+d;if(ni<0||ni>=cats.length)return;var u=cats.slice();var t=u[idx];u[idx]=u[ni];u[ni]=t;oc(u);}
-  function rm(id){oc(cats.filter(function(c){return c.id!==id}));}
-  function ac(){oc(cats.concat([makeCategory("New Category")]));}
-  var tp=cats.reduce(function(s,c){return c.included&&c.sources.salary?s+c.percent:s},0),ta=cats.reduce(function(s,c){return c.included&&c.sources.salary?s+c.amount:s},0);
-  return(<div className="overflow-x-auto bg-white rounded-xl border border-stone-200 shadow-sm"><table className="min-w-full text-sm"><thead className="bg-emerald-50 text-emerald-900"><tr><th className="p-2 text-left">Category</th>{sm?<th className="p-2 text-left">Method</th>:null}{sm?<th className="p-2 text-left">Type</th>:null}<th className="p-2 text-left">%</th>{sm?<th className="p-2 text-left">Fixed $</th>:null}<th className="p-2 text-left">Amount $</th><th className="p-2 text-left">Notes</th><th className="p-2 text-left">Include</th>{sm?<th className="p-2 text-left">Sources</th>:null}<th className="p-2 text-left">Order</th><th className="p-2 text-left"></th></tr></thead><tbody>{cats.map(function(c,i){return(<tr key={c.id}className="border-t border-stone-100"><td className="p-2"><input className="border border-stone-300 rounded px-2 py-1 w-40"value={c.name}onChange={function(e){ur(c.id,{name:e.target.value})}}/></td>{sm?(<td className="p-2"><select className="border border-stone-300 rounded px-2 py-1"value={c.method}onChange={function(e){ur(c.id,{method:e.target.value})}}><option value="percentage">Percentage</option><option value="fixed">Fixed</option><option value="hybrid">Hybrid</option></select></td>):null}{sm?(<td className="p-2"><select className="border border-stone-300 rounded px-2 py-1"value={c.type}onChange={function(e){ur(c.id,{type:e.target.value})}}><option value="expense">Expense</option><option value="savings">Savings</option><option value="investment">Investment</option><option value="personalInvestment">Personal Investment</option><option value="income">Income</option><option value="other">Other</option></select></td>):null}<td className="p-2"><input type="number"step="0.01"className="border border-stone-300 rounded px-2 py-1 w-20"value={c.percent}onChange={function(e){ur(c.id,{percent:parseFloat(e.target.value)||0})}}/></td>{sm?(<td className="p-2"><input type="number"step="0.01"className="border border-stone-300 rounded px-2 py-1 w-24"value={c.fixedAmount}onChange={function(e){ur(c.id,{fixedAmount:parseFloat(e.target.value)||0})}}/></td>):null}<td className="p-2"><input type="number"step="0.01"className="border border-stone-300 rounded px-2 py-1 w-24"value={Math.round(c.amount*100)/100}onChange={function(e){ur(c.id,{amount:parseFloat(e.target.value)||0})}}/></td><td className="p-2"><input className="border border-stone-300 rounded px-2 py-1 w-40"value={c.notes}onChange={function(e){ur(c.id,{notes:e.target.value})}}/></td><td className="p-2 text-center"><input type="checkbox"checked={c.included}onChange={function(e){ur(c.id,{included:e.target.checked})}}/>{sm?(<td className="p-2"><div className="flex flex-col gap-1 text-xs">{["salary","business","investment","bonus","other"].map(function(k){return(<label key={k}className="flex items-center gap-1"><input type="checkbox"checked={c.sources[k]}onChange={function(e){us(c.id,k,e.target.checked)}}/>{k}</label>)})}</div></td>):null}<td className="p-2"><button onClick={function(){mv(c.id,-1)}}disabled={i===0}className="px-2">Up</button><button onClick={function(){mv(c.id,1)}}disabled={i===cats.length-1}className="px-2">Down</button></td><td className="p-2"><button onClick={function(){rm(c.id)}}className="text-rose-600">Remove</button></td></tr>)})}</tbody></table><div className="p-3 flex justify-between items-center border-t border-stone-200"><button onClick={ac}className="bg-teal-700 text-white px-3 py-1 rounded">+ Add Category</button><div className="text-sm text-stone-600">Total: {tp.toFixed(1)}% / ${ta.toFixed(2)}</div></div></div>);
+function loadLocalData() {
+  try {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return migrate(JSON.parse(raw));
+    var legacy = loadLegacyData();
+    if (legacy) return migrate(legacy);
+    return freshData();
+  } catch (e) {
+    console.error("Load error:", e);
+    return freshData();
+  }
 }
-function TotalsSidebar(props){var data=props.data,setData=props.setData;var totals=aggregateTotals(data.history,data.adjustments,data.transfers,data.withdrawals);var cn=data.template.map(function(c){return c.name});var[ac,setAc]=React.useState(cn[0]||"");var[aa,setAa]=React.useState("");var[an,setAn]=React.useState("");var[fc,setFc]=React.useState(cn[0]||"");var[tc,setTc]=React.useState(cn[1]||cn[0]||"");var[ta,setTa]=React.useState("");var[tn,setTn]=React.useState("");var[pc,setPc]=React.useState(cn[0]||"");var[pa,setPa]=React.useState("");var[pn,setPn]=React.useState("");
-  function ha(){var a=parseFloat(aa);if(!a)return;setData(Object.assign({},data,{adjustments:data.adjustments.concat([{id:uid(),date:todayISO(),categoryName:ac,amount:a,note:an})]}));setAa("");setAn("");}
-  function ht(){var a=parseFloat(ta);if(!a||fc===tc)return;setData(Object.assign({},data,{transfers:data.transfers.concat([{id:uid(),date:todayISO(),fromCategory:fc,toCategory:tc,amount:a,note:tn})]}));setTa("");setTn("");}
-  function hp(){var a=parseFloat(pa);if(!a)return;setData(applyWithdrawal(data,pc,a,pn));setPa("");setPn("");}
-  return(<div className="bg-stone-100 rounded-xl p-4 border border-stone-200"><h3 className="font-bold text-stone-700 mb-2">Stored Totals</h3><div className="space-y-1 mb-4 max-h-64 overflow-y-auto">{cn.map(function(n){var v=totals[n]||0;return(<div key={n}className="flex justify-between text-sm"><span className="text-stone-600">{n}</span><span className={v<0?"text-rose-600 font-semibold":"text-stone-800"}>${v.toFixed(2)}</span></div>)})}</div><div className="bg-white rounded-lg p-3 mb-3 border border-stone-200"><h4 className="font-semibold text-sm mb-2 text-emerald-800">Adjust</h4><select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={ac}onChange={function(e){setAc(e.target.value)}}>{cn.map(function(n){return(<option key={n}value={n}>{n}</option>)})}</select><input type="number"placeholder="Amount (+/-)"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={aa}onChange={function(e){setAa(e.target.value)}}/><input placeholder="Note"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={an}onChange={function(e){setAn(e.target.value)}}/><button onClick={ha}className="bg-emerald-700 text-white rounded px-3 py-1 text-sm w-full">Apply Adjustment</button></div><div className="bg-white rounded-lg p-3 mb-3 border border-stone-200"><h4 className="font-semibold text-sm mb-2 text-teal-800">Transfer Between Categories</h4><select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={fc}onChange={function(e){setFc(e.target.value)}}>{cn.map(function(n){return(<option key={n}value={n}>{n}</option>)})}</select><select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={tc}onChange={function(e){setTc(e.target.value)}}>{cn.map(function(n){return(<option key={n}value={n}>{n}</option>)})}</select><input type="number"placeholder="Amount"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={ta}onChange={function(e){setTa(e.target.value)}}/><input placeholder="Note"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={tn}onChange={function(e){setTn(e.target.value)}}/><button onClick={ht}className="bg-teal-700 text-white rounded px-3 py-1 text-sm w-full">Apply Transfer</button></div><div className="bg-white rounded-lg p-3 border border-stone-200"><h4 className="font-semibold text-sm mb-2 text-amber-700">Send to Present Usage</h4><p className="text-xs text-stone-500 mb-1">Added this month: ${data.currentMonth.presentUsageAdded.toFixed(2)}</p><select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={pc}onChange={function(e){setPc(e.target.value)}}>{cn.map(function(n){return(<option key={n}value={n}>{n}</option>)})}</select><input type="number"placeholder="Amount"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={pa}onChange={function(e){setPa(e.target.value)}}/><input placeholder="Note"className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm"value={pn}onChange={function(e){setPn(e.target.value)}}/><button onClick={hp}className="bg-amber-600 text-white rounded px-3 py-1 text-sm w-full">Withdraw to This Month</button></div></div>);}
-function AdjustmentRow(props){var a=props.a,data=props.data,setData=props.setData;var[e,setE]=React.useState(false);var[c,setC]=React.useState(a.categoryName);var[m,setM]=React.useState(a.amount);var[n,setN]=React.useState(a.note);function sv(){setData(Object.assign({},data,{adjustments:data.adjustments.map(function(x){return x.id===a.id?Object.assign({},x,{categoryName:c,amount:parseFloat(m)||0,note:n}):x})}));setE(false);}function dl(){setData(Object.assign({},data,{adjustments:data.adjustments.filter(function(x){return x.id!==a.id})}));}if(e)return(<tr><td className="p-1">{a.date}</td><td className="p-1"><input className="border rounded px-1 w-32"value={c}onChange={function(e){setC(e.target.value)}}/></td><td className="p-1"><input type="number"className="border rounded px-1 w-20"value={m}onChange={function(e){setM(e.target.value)}}/></td><td className="p-1"><input className="border rounded px-1 w-32"value={n}onChange={function(e){setN(e.target.value)}}/></td><td className="p-1"><button onClick={sv}className="text-emerald-700 mr-2">Save</button><button onClick={function(){setE(false)}}className="text-stone-500">Cancel</button></td></tr>);return(<tr><td className="p-1">{a.date}</td><td className="p-1">{a.categoryName}</td><td className={"p-1 "+(a.amount<0?"text-rose-600":"")}>${a.amount.toFixed(2)}</td><td className="p-1">{a.note}</td><td className="p-1"><button onClick={function(){setE(true)}}className="text-emerald-700 mr-2">Edit</button><button onClick={dl}className="text-rose-600">Delete</button></td></tr>);}
-function TransferRow(props){var t=props.t,data=props.data,setData=props.setData;var[e,setE]=React.useState(false);var[f,setF]=React.useState(t.fromCategory);var[to,setTo]=React.useState(t.toCategory);var[a,setA]=React.useState(t.amount);var[n,setN]=React.useState(t.note);function sv(){setData(Object.assign({},data,{transfers:data.transfers.map(function(x){return x.id===t.id?Object.assign({},x,{fromCategory:f,toCategory:to,amount:parseFloat(a)||0,note:n}):x})}));setE(false);}function dl(){setData(Object.assign({},data,{transfers:data.transfers.filter(function(x){return x.id!==t.id})}));}if(e)return(<tr><td className="p-1">{t.date}</td><td className="p-1"><input className="border rounded px-1 w-28"value={f}onChange={function(e){setF(e.target.value)}}/></td><td className="p-1"><input className="border rounded px-1 w-28"value={to}onChange={function(e){setTo(e.target.value)}}/></td><td className="p-1"><input type="number"className="border rounded px-1 w-20"value={a}onChange={function(e){setA(e.target.value)}}/></td><td className="p-1"><input className="border rounded px-1 w-28"value={n}onChange={function(e){setN(e.target.value)}}/></td><td className="p-1"><button onClick={sv}className="text-emerald-700 mr-2">Save</button><button onClick={function(){setE(false)}}className="text-stone-500">Cancel</button></td></tr>);return(<tr><td className="p-1">{t.date}</td><td className="p-1">{t.fromCategory}</td><td className="p-1">{t.toCategory}</td><td className="p-1">${t.amount.toFixed(2)}</td><td className="p-1">{t.note}</td><td className="p-1"><button onClick={function(){setE(true)}}className="text-emerald-700 mr-2">Edit</button><button onClick={dl}className="text-rose-600">Delete</button></td></tr>);}
-function WithdrawalRow(props){var w=props.w,data=props.data,setData=props.setData;var[e,setE]=React.useState(false);var[c,setC]=React.useState(w.fromCategory);var[a,setA]=React.useState(w.amount);var[n,setN]=React.useState(w.note);var lk=w.monthLabel!==data.currentMonth.monthLabel;function sv(){setData(applyEditedWithdrawal(data,w,c,parseFloat(a)||0,n));setE(false);}function un(){setData(undoWithdrawalEffect(data,w));}if(lk)return(<tr><td className="p-1">{w.date}</td><td className="p-1">{w.fromCategory}</td><td className="p-1">${w.amount.toFixed(2)}</td><td className="p-1">{w.note}</td><td className="p-1 text-stone-400 italic">Locked (part of {w.monthLabel})</td></tr>);if(e)return(<tr><td className="p-1">{w.date}</td><td className="p-1"><input className="border rounded px-1 w-28"value={c}onChange={function(e){setC(e.target.value)}}/></td><td className="p-1"><input type="number"className="border rounded px-1 w-20"value={a}onChange={function(e){setA(e.target.value)}}/></td><td className="p-1"><input className="border rounded px-1 w-28"value={n}onChange={function(e){setN(e.target.value)}}/></td><td className="p-1"><button onClick={sv}className="text-emerald-700 mr-2">Save</button><button onClick={function(){setE(false)}}className="text-stone-500">Cancel</button></td></tr>);return(<tr><td className="p-1">{w.date}</td><td className="p-1">{w.fromCategory}</td><td className="p-1">${w.amount.toFixed(2)}</td><td className="p-1">{w.note}</td><td className="p-1"><button onClick={function(){setE(true)}}className="text-emerald-700 mr-2">Edit</button><button onClick={un}className="text-rose-600">Undo</button></td></tr>);}
-function HistoryEntryCard(props){var h=props.h,data=props.data,setData=props.setData;var[e,setE]=React.useState(false);var[cs,setCs]=React.useState(h.categories);function sv(){setData(Object.assign({},data,{history:data.history.map(function(x){return x.id===h.id?Object.assign({},x,{categories:cs}):x})}));setE(false);}function dl(){setData(Object.assign({},data,{history:data.history.filter(function(x){return x.id!==h.id})}));}return(<div className="bg-white rounded-xl border border-stone-200 p-4 mb-3"><div className="flex justify-between items-center mb-2"><h4 className="font-bold text-emerald-800">{h.monthLabel} - Salary ${h.salary.toFixed(2)}</h4><div>{e?(<><button onClick={sv}className="text-emerald-700 mr-2">Save</button><button onClick={function(){setE(false);setCs(h.categories)}}className="text-stone-500 mr-2">Cancel</button></>):(<button onClick={function(){setE(true)}}className="text-emerald-700 mr-2">Edit This Month</button>)}<button onClick={dl}className="text-rose-600">Delete This Month</button></div></div>{e?(<AllocationTable categories={cs}onChange={setCs}showMethod={true}salary={h.salary}/>):(<div className="text-sm text-stone-600 grid grid-cols-2 md:grid-cols-3 gap-1">{h.categories.filter(function(c){return c.included}).map(function(c){return<div key={c.id}>{c.name}: ${c.amount.toFixed(2)}</div>})}</div></div>);}
-function ResetDatabaseButton(props){var setData=props.setData;function hr(){var pw=prompt("Enter password to reset:");if(pw!=="2007"){if(pw!==null)alert("Incorrect.");return;}if(!confirm("This will delete EVERYTHING permanently. Continue?"))return;setData(freshData());}return(<div className="bg-rose-50 border border-rose-300 rounded-xl p-4 mt-6"><h3 className="font-bold text-rose-700 mb-2">Danger Zone</h3><p className="text-sm text-rose-600 mb-3">Erases everything. Cannot be undone.</p><button onClick={hr}className="bg-rose-600 text-white px-4 py-2 rounded">Reset Entire Database</button></div>);}
-function ExcelExportPanel(props){var data=props.data;var months=sortedMonthLabels(data.history);var[f,setF]=React.useState(months[0]||"");var[t,setT]=React.useState(months[months.length-1]||"");var[w,setW]=React.useState(false);if(months.length===0)return(<div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><h3 className="font-bold text-emerald-800 mb-1">Download Excel Report</h3><p className="text-sm text-stone-500">Archive one month first.</p></div>);if(typeof ExcelJS==="undefined")return(<div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><h3 className="font-bold text-emerald-800 mb-1">Download Excel Report</h3><p className="text-sm text-rose-500">Excel library did not load. Check connection.</p></div>);function hd(){setW(true);generateExcelReport(data,f,t).then(function(){setW(false)}).catch(function(e){console.error(e);setW(false);alert("Failed.")});}return(<div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><h3 className="font-bold text-emerald-800 mb-2">Download Excel Report</h3><div className="flex flex-wrap gap-2 items-center mb-2"><label className="text-sm">From</label><select className="border border-stone-300 rounded px-2 py-1"value={f}onChange={function(e){setF(e.target.value)}}>{months.map(function(m){return(<option key={m}value={m}>{m}</option>)})}</select><label className="text-sm">To</label><select className="border border-stone-300 rounded px-2 py-1"value={t}onChange={function(e){setT(e.target.value)}}>{months.map(function(m){return(<option key={m}value={m}>{m}</option>)})}</select></div><button onClick={hd}disabled={w}className="bg-teal-700 text-white px-4 py-2 rounded">{w?"Preparing...":"Download Excel (.xlsx)"}</button></div>);}
-function SettingsPage(props){var data=props.data,setData=props.setData;var[name,setName]=React.useState(data.ownerName);function htc(nc){setData(Object.assign({},data,{template:nc}))}function sn(){setData(Object.assign({},data,{ownerName:name}))}return(<div><h2 className="text-xl font-bold text-emerald-800 mb-3">Settings</h2><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><label className="block text-sm text-stone-600 mb-1">Your Name</label><div className="flex gap-2"><input className="border border-stone-300 rounded px-2 py-1 flex-1"value={name}onChange={function(e){setName(e.target.value)}}/><button onClick={sn}className="bg-emerald-700 text-white px-3 py-1 rounded">Save Name</button></div></div><AllocationTable categories={data.template}onChange={htc}showMethod={true}salary={0}/><p className="text-xs text-stone-500 mt-2">Changes here affect future months only.</p></div>);}
-function DashboardPage(props){var data=props.data,setData=props.setData;var ts=data.history.reduce(function(s,h){return s+h.salary},0);var totals=aggregateTotals(data.history,data.adjustments,data.transfers,data.withdrawals);var nt=Object.keys(totals).reduce(function(s,k){return s+totals[k]},0);return(<div><h2 className="text-xl font-bold text-emerald-800 mb-3">Dashboard</h2><div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4"><div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Total Salary Recorded</div><div className="text-2xl font-bold text-emerald-700">${ts.toFixed(2)}</div></div><div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Net Total Allocated</div><div className="text-2xl font-bold text-teal-700">${nt.toFixed(2)}</div></div><div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Months Closed</div><div className="text-2xl font-bold text-amber-700">{data.history.length}</div></div></div><ExcelExportPanel data={data}/><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto"><h3 className="font-bold text-emerald-800 mb-2">Category Totals</h3><table className="w-full text-sm"><tbody>{Object.keys(totals).map(function(n){return(<tr key={n}className="border-t border-stone-100"><td className="p-1">{n}</td><td className={"p-1 "+(totals[n]<0?"text-rose-600 font-semibold":"")}>${totals[n].toFixed(2)}</td></tr>)})}</tbody></table></div><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto"><h3 className="font-bold text-teal-800 mb-2">Transfers</h3><table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">From</th><th className="text-left p-1">To</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead><tbody>{data.transfers.map(function(tr){return(<TransferRow key={tr.id} t={tr} data={data} setData={setData}/>)})}</tbody></table></div><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto"><h3 className="font-bold text-emerald-800 mb-2">Adjustments</h3><table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">Category</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead><tbody>{data.adjustments.map(function(ad){return(<AdjustmentRow key={ad.id} a={ad} data={data} setData={setData}/>)})}</tbody></table></div><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto"><h3 className="font-bold text-amber-700 mb-2">Present Usage Withdrawals</h3><table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">From</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead><tbody>{data.withdrawals.map(function(wd){return(<WithdrawalRow key={wd.id} w={wd} data={data} setData={setData}/>)})}</tbody></table></div><div className="mb-4"><h3 className="font-bold text-emerald-800 mb-2">History</h3>{data.history.slice().reverse().map(function(hi){return(<HistoryEntryCard key={hi.id} h={hi} data={data} setData={setData}/>)})}{data.history.length===0?<p className="text-sm text-stone-500">No months archived yet.</p>:null}</div><ResetDatabaseButton setData={setData}/></div>);}
-function ProgressPage(props){var data=props.data;var sorted=data.history.slice().sort(function(a,b){return monthLabelToIndex(a.monthLabel)-monthLabelToIndex(b.monthLabel)});var br=React.useRef(null),lr=React.useRef(null);function st(ht,type){return ht.categories.filter(function(c){return c.included&&c.type===type}).reduce(function(s,c){return s+c.amount},0);}function cum(arr){var out=[],run=0;arr.forEach(function(v){run+=v;out.push(run)});return out;}var labs=sorted.map(function(h){return h.monthLabel}),salArr=sorted.map(function(h){return h.salary}),expArr=sorted.map(function(h){return st(h,"expense")}),savArr=sorted.map(function(h){return st(h,"savings")}),invArr=sorted.map(function(h){return st(h,"investment")}),piArr=sorted.map(function(h){return st(h,"personalInvestment")}),cs=cum(savArr),ci=cum(invArr),cp=cum(piArr),ct=cs.map(function(v,i){return v+ci[i]+cp[i]});useChartInstance(br,{type:"bar",data:{labels:labs,datasets:[{label:"Salary",data:salArr,backgroundColor:"#065f46"},{label:"Expenses",data:expArr,backgroundColor:"#f43f5e"},{label:"Savings",data:savArr,backgroundColor:"#0d9488"},{label:"Investments",data:invArr,backgroundColor:"#ca8a04"},{label:"Personal Inv.",data:piArr,backgroundColor:"#7e22ce"}],options:{responsive:true}},[JSON.stringify(labs),JSON.stringify(salArr)]);useChartInstance(lr,{type:"line",data:{labels:labs,datasets:[{label:"Cum.Savings",data:cs,borderColor:"#0d9488",fill:false},{label:"Cum.Investments",data:ci,borderColor:"#ca8a04",fill:false},{label:"Cum.Personal Inv.",data:cp,borderColor:"#7e22ce",fill:false},{label:"Total Wealth Growth",data:ct,borderColor:"#065f46",fill:false,borderWidth:3}]},options:{responsive:true}},[JSON.stringify(labs),JSON.stringify(ct)]);if(sorted.length===0)return<div className="bg-white rounded-xl border border-stone-200 p-6 text-stone-500">Archive at least one month first.</div>;return(<div><h2 className="text-xl font-bold text-emerald-800 mb-3">Progress Chart</h2><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><canvas ref={br}></canvas></div><div className="bg-white rounded-xl border border-stone-200 p-4"><canvas ref={lr}></canvas></div></div>);}
-function MainPage(props){var data=props.data,setData=props.setData,setView=props.setView,cm=data.currentMonth;
-  function hsc(e){var v=e.target.value,num=parseFloat(v)||0;setData(Object.assign({},data,{currentMonth:Object.assign({},cm,{salary:num,salaryInput:v,categories:recalcForSalary(cm.categories,num)})}))}
-  function hcc(nc){setData(Object.assign({},data,{currentMonth:Object.assign({},cm,{categories:nc})}))}
-  function sd(){alert("Draft saved. Does not affect permanent totals until End Month.");}
-  function sad(){setData(Object.assign({},data,{template:cm.categories.map(function(c){return Object.assign({},c)})}));alert("Saved as default template.")}
-  function rtt(){setData(Object.assign({},data,{currentMonth:Object.assign({},cm,{categories:recalcForSalary(data.template.map(function(c){return Object.assign({},c)}),cm.salary)})}))}
-  function ema(){if(!confirm("Archive "+cm.monthLabel+"?"))return;var ar={id:uid(),date:todayISO(),monthLabel:cm.monthLabel,salary:cm.salary,categories:cm.categories};var fc=recalcForSalary(data.template.map(function(c){return Object.assign({},c)}),0);setData(Object.assign({},data,{history:data.history.concat([ar]),currentMonth:{salary:0,salaryInput:"",presentUsageAdded:0,categories:fc,monthLabel:currentMonthLabel()}}))}
-  var ac=cm.categories.filter(function(c){return c.included&&c.sources&&c.sources.salary});var tp=ac.reduce(function(s,c){return s+c.percent},0);var ta=ac.reduce(function(s,c){return s+c.amount},0);var rem=cm.salary-ta;var op=tp>100.05,oa=ta>cm.salary+0.01;
-  return(<div><h2 className="text-xl font-bold text-emerald-800 mb-3">Monthly Allocation - {cm.monthLabel}</h2><div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><label className="block text-sm text-stone-600 mb-1">Monthly Salary</label><input type="number"className="border border-stone-300 rounded px-3 py-2 w-48"value={cm.salaryInput}onChange={hsc}placeholder="2500"/>{cm.presentUsageAdded>0?<p className="text-sm text-amber-700 mt-2">+${cm.presentUsageAdded.toFixed(2)} from Present Usage</p>:null}</div><div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4"><div className={"rounded-lg p-3 border "+(op?"bg-rose-50 border-rose-300":"bg-white border-stone-200")}><div className="text-xs text-stone-500">Allocated %</div><div className={"text-lg font-bold "+(op?"text-rose-600":"text-emerald-700")}>{tp.toFixed(1)}%</div></div><div className={"rounded-lg p-3 border "+(oa?"bg-rose-50 border-rose-300":"bg-white border-stone-200")}><div className="text-xs text-stone-500">Allocated $</div><div className={"text-lg font-bold "+(oa?"text-rose-600":"text-teal-700")}>${ta.toFixed(2)}</div></div><div className="rounded-lg p-3 border bg-white border-stone-200"><div className="text-xs text-stone-500">Remaining</div><div className="text-lg font-bold text-amber-700">${rem.toFixed(2)}</div></div></div><div className="grid grid-cols-1 lg:grid-cols-3 gap-4"><div className="lg:col-span-2"><AllocationTable categories={cm.categories}onChange={hcc}showMethod={false}salary={cm.salary}/><div className="flex flex-wrap gap-2 mt-4"><button onClick={sd}className="bg-stone-600 text-white px-3 py-2 rounded">Save Draft</button><button onClick={ema}className="bg-emerald-700 text-white px-3 py-2 rounded">End Month & Archive</button><button onClick={sad}className="bg-teal-700 text-white px-3 py-2 rounded">Save as Default</button><button onClick={rtt}className="bg-amber-600 text-white px-3 py-2 rounded">Reset to Template</button><button onClick={function(){}}className="bg-stone-200 text-stone-700 px-3 py-2 rounded">Customize</button><button onClick={function(){setView("settings")}}className="bg-stone-200 text-stone-700 px-3 py-2 rounded">Edit Categories</button></div></div><div className="lg:col-span-1"><TotalsSidebar data={data} setData={setData}/></div></div></div>);}
-function App(props){var data=props.data,setData=props.setData,sa=props.syncActive;var[view,setView]=React.useState("main");var[nd,setNd]=React.useState(false);var nn=data.currentMonth.monthLabel!==currentMonthLabel()&&(data.currentMonth.salary>0||data.currentMonth.categories.some(function(c){return c.amount!==0}))&&!nd;return(<div className="min-h-screen bg-stone-50 px-4 py-4 max-w-6xl mx-auto"><Header view={view} setView={setView} syncActive={sa}/><QuoteBanner/>{nn?<MonthChangeNotice data={data} setData={setData} onDismiss={function(){setNd(true)}}/>:null}{view==="main"?<MainPage data={data} setData={setData} setView={setView}/>:null}{view==="dashboard"?<DashboardPage data={data} setData={setData}/>:null}{view==="progress"?<ProgressPage data={data}/>:null}{view==="settings"?<SettingsPage data={data} setData={setData}/>:null}<Footer/></div>);}
-function LoginScreen(){
-  var R=window.React;var US=R.useState;
-  var[em,setEm]=US(""),[pw,setPw]=US(""),[er,setEr]=US(""),[bu,setBu]=US(false);
-  function hs(e){if(e&&e.preventDefault)e.preventDefault();setEr("");if(!em||!em.trim()){setEr("Please enter email.");return;}if(!pw||!pw.trim()){setEr("Please enter password.");return;}setBu(true);firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL).then(function(){return firebase.auth().signInWithEmailAndPassword(em.trim(),pw)}).then(function(){setBu(false)}).catch(function(err){setBu(false);setEr(err&&err.message?err.message:"Sign in failed.")});}
-  return R.createElement("div",{style:{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f3ef",padding:"20px"}},
-    R.createElement("form",{onSubmit:hs,style:{background:"#fff",padding:"30px",borderRadius:"12px",boxShadow:"0 2px 10px rgba(0,0,0,0.15)",width:"100%",maxWidth:"380px"}},
-      R.createElement("h2",{style:{marginBottom:"20px",color:"#065f46",fontSize:"22px",fontWeight:"bold"}},"Sign In"),
-      R.createElement("label",{style:{display:"block",fontWeight:"bold",marginBottom:"6px",color:"#1f2937"}},"Email"),
-      R.createElement("input",{type:"email",value:em,autoFocus:true,placeholder:"your@email.com",onChange:function(e){setEm(e.target.value)},style:{width:"100%",padding:"12px",marginBottom:"18px",border:"2px solid #0d9488",borderRadius:"8px",fontSize:"16px",boxSizing:"border-box"}}),
-      R.createElement("label",{style:{display:"block",fontWeight:"bold",marginBottom:"6px",color:"#1f2937"}},"Password"),
-      R.createElement("input",{type:"password",value:pw,placeholder:"Password",onChange:function(e){setPw(e.target.value)},style:{width:"100%",padding:"12px",marginBottom:"18px",border:"2px solid #0d9488",borderRadius:"8px",fontSize:"16px",boxSizing:"border-box"}}),
-      er?R.createElement("div",{style:{color:"#dc2626",marginBottom:"14px",fontWeight:"bold",fontSize:"14px"}},er):null,
-      R.createElement("button",{type:"submit",disabled:bu,style:{width:"100%",padding:"12px",background:"#0f766e",color:"#fff",border:"none",borderRadius:"8px",fontSize:"16px",fontWeight:"bold",cursor:"pointer"}},bu?"Signing in...":"Sign In")
+
+function saveLocalData(data) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) { console.error("Save error:", e); }
+}
+
+/* ======================== CALCULATION HELPERS ======================== */
+
+function recalcForSalary(categories, salary) {
+  return categories.map(function (c) {
+    if (c.method === "fixed") return Object.assign({}, c, { amount: c.fixedAmount });
+    if (c.method === "hybrid") return Object.assign({}, c, { amount: c.fixedAmount + salary * (c.percent / 100) });
+    return Object.assign({}, c, { amount: salary * (c.percent / 100) });
+  });
+}
+
+function aggregateTotals(history, adjustments, transfers, withdrawals) {
+  var totals = {};
+  function add(name, amt) { if (!totals[name]) totals[name] = 0; totals[name] += amt; }
+  (history || []).forEach(function (h) { (h.categories || []).forEach(function (c) { if (c.included) add(c.name, c.amount); }); });
+  (adjustments || []).forEach(function (a) { add(a.categoryName, a.amount); });
+  (transfers || []).forEach(function (t) { add(t.fromCategory, -t.amount); add(t.toCategory, t.amount); });
+  (withdrawals || []).forEach(function (w) { add(w.fromCategory, -w.amount); });
+  return totals;
+}
+
+function applyWithdrawal(data, fromCategory, amount, note) {
+  var w = { id: uid(), date: todayISO(), monthLabel: data.currentMonth.monthLabel, fromCategory: fromCategory, amount: amount, note: note || "" };
+  var newSalary = data.currentMonth.salary + amount;
+  return Object.assign({}, data, {
+    withdrawals: data.withdrawals.concat([w]),
+    currentMonth: Object.assign({}, data.currentMonth, {
+      presentUsageAdded: data.currentMonth.presentUsageAdded + amount,
+      salary: newSalary,
+      categories: recalcForSalary(data.currentMonth.categories, newSalary)
+    })
+  });
+}
+
+function undoWithdrawalEffect(data, w) {
+  var newSalary = data.currentMonth.salary - w.amount;
+  return Object.assign({}, data, {
+    withdrawals: data.withdrawals.filter(function (x) { return x.id !== w.id; }),
+    currentMonth: Object.assign({}, data.currentMonth, {
+      presentUsageAdded: data.currentMonth.presentUsageAdded - w.amount,
+      salary: newSalary,
+      categories: recalcForSalary(data.currentMonth.categories, newSalary)
+    })
+  });
+}
+
+function applyEditedWithdrawal(data, w, newFromCategory, newAmount, newNote) {
+  return applyWithdrawal(undoWithdrawalEffect(data, w), newFromCategory, newAmount, newNote);
+}
+
+/* ============================ EXCEL EXPORT ============================ */
+
+async function generateExcelReport(data, fromLabel, toLabel) {
+  var workbook = new ExcelJS.Workbook();
+  var filteredHistory = filterHistoryByRange(data.history, fromLabel, toLabel);
+
+  function sumByType(type) {
+    var sum = 0;
+    filteredHistory.forEach(function (h) { h.categories.forEach(function (c) { if (c.included && c.type === type) sum += c.amount; }); });
+    return sum;
+  }
+
+  var totalSalary = filteredHistory.reduce(function (s, h) { return s + h.salary; }, 0);
+
+  var summarySheet = workbook.addWorksheet("Summary");
+  summarySheet.getCell("A1").value = "Financial Freedom Report";
+  summarySheet.getCell("A1").font = { bold: true, size: 16, color: { argb: "FF0F766E" } };
+  summarySheet.getCell("A2").value = "Owner: " + (data.ownerName || "N/A");
+  summarySheet.getCell("A3").value = "Period: " + fromLabel + " to " + toLabel;
+  summarySheet.getCell("A4").value = "Generated: " + new Date().toLocaleString();
+  var rows = [
+    ["Total Salary", totalSalary],
+    ["Total Expenses", sumByType("expense")],
+    ["Total Savings", sumByType("savings")],
+    ["Total Investments", sumByType("investment")],
+    ["Total Personal Investments", sumByType("personalInvestment")],
+    ["Total Other Income", sumByType("income")],
+    ["Months Included", filteredHistory.length]
+  ];
+  rows.forEach(function (r, i) {
+    var rn = 6 + i;
+    summarySheet.getCell("A" + rn).value = r[0];
+    summarySheet.getCell("A" + rn).font = { bold: true };
+    summarySheet.getCell("B" + rn).value = r[1];
+    summarySheet.getCell("B" + rn).font = { bold: true, color: { argb: "FF0F766E" } };
+  });
+  summarySheet.getColumn(1).width = 28;
+  summarySheet.getColumn(2).width = 20;
+
+  function buildCategorySheet(title, typeFilter, colorHex) {
+    var sheet = workbook.addWorksheet(title);
+    sheet.getColumn(1).width = 30; sheet.getColumn(2).width = 16; sheet.getColumn(3).width = 40;
+    var row = 1;
+    var banner = sheet.getCell("A" + row);
+    banner.value = title + " - Grand Total: $" + sumByType(typeFilter).toFixed(2);
+    banner.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+    banner.fill = { type: "pattern", pattern: "solid", fgColor: { argb: colorHex } };
+    sheet.mergeCells("A" + row + ":C" + row);
+    row += 2;
+
+    var categoryNames = {};
+    filteredHistory.forEach(function (h) { h.categories.forEach(function (c) { if (c.included && c.type === typeFilter) categoryNames[c.name] = true; }); });
+
+    Object.keys(categoryNames).forEach(function (name) {
+      var subtotal = 0;
+      filteredHistory.forEach(function (h) { h.categories.forEach(function (c) { if (c.name === name && c.included && c.type === typeFilter) subtotal += c.amount; }); });
+      var hCell = sheet.getCell("A" + row);
+      hCell.value = name + " - Subtotal: $" + subtotal.toFixed(2);
+      hCell.font = { bold: true, color: { argb: colorHex } };
+      sheet.mergeCells("A" + row + ":C" + row);
+      row++;
+      sheet.getCell("A" + row).value = "Month"; sheet.getCell("B" + row).value = "Amount ($)"; sheet.getCell("C" + row).value = "Notes";
+      sheet.getRow(row).font = { bold: true };
+      row++;
+      filteredHistory.forEach(function (h) {
+        h.categories.forEach(function (c) {
+          if (c.name === name && c.included && c.type === typeFilter) {
+            sheet.getCell("A" + row).value = h.monthLabel;
+            sheet.getCell("B" + row).value = c.amount;
+            sheet.getCell("C" + row).value = c.notes || "";
+            row++;
+          }
+        });
+      });
+      row++;
+    });
+  }
+
+  buildCategorySheet("Expenses", "expense", "FF0F766E");
+  buildCategorySheet("Savings", "savings", "FF0D9488");
+  buildCategorySheet("Investments", "investment", "FFCA8A04");
+  buildCategorySheet("Personal Investments", "personalInvestment", "FF7E22CE");
+  buildCategorySheet("Other Income", "income", "FF57534E");
+
+  function buildLogSheet(title, items, columns) {
+    var sheet = workbook.addWorksheet(title);
+    var headerCell = sheet.getCell("A1");
+    headerCell.value = title;
+    headerCell.font = { bold: true, size: 14, color: { argb: "FFFFFFFF" } };
+    headerCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+    sheet.mergeCells("A1:" + String.fromCharCode(64 + columns.length) + "1");
+    columns.forEach(function (col, i) {
+      sheet.getCell(2, i + 1).value = col.header;
+      sheet.getCell(2, i + 1).font = { bold: true };
+      sheet.getColumn(i + 1).width = col.width || 18;
+    });
+    var r = 3;
+    items.forEach(function (item) {
+      columns.forEach(function (col, i) { sheet.getCell(r, i + 1).value = item[col.key]; });
+      r++;
+    });
+  }
+
+  buildLogSheet("Adjustments", data.adjustments.filter(function (a) { return dateInRange(a.date, fromLabel, toLabel); }),
+    [{ header: "Date", key: "date" }, { header: "Category", key: "categoryName", width: 26 }, { header: "Amount", key: "amount" }, { header: "Note", key: "note", width: 40 }]);
+  buildLogSheet("Transfers", data.transfers.filter(function (t) { return dateInRange(t.date, fromLabel, toLabel); }),
+    [{ header: "Date", key: "date" }, { header: "From", key: "fromCategory", width: 26 }, { header: "To", key: "toCategory", width: 26 }, { header: "Amount", key: "amount" }, { header: "Note", key: "note", width: 40 }]);
+  buildLogSheet("Present Usage Withdrawals", data.withdrawals.filter(function (w) { return dateInRange(w.date, fromLabel, toLabel); }),
+    [{ header: "Date", key: "date" }, { header: "Month", key: "monthLabel" }, { header: "From", key: "fromCategory", width: 26 }, { header: "Amount", key: "amount" }, { header: "Note", key: "note", width: 40 }]);
+
+  var buffer = await workbook.xlsx.writeBuffer();
+  var blob = new Blob([buffer], { type: "application/octet-stream" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "Financial_Freedom_Report_" + fromLabel.replace(" ", "_") + "_to_" + toLabel.replace(" ", "_") + ".xlsx";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============================ CHART HOOK ============================ */
+
+function useChartInstance(canvasRef, config, deps) {
+  var chartRef = React.useRef(null);
+  var depsKey = JSON.stringify(deps);
+  React.useEffect(function () {
+    if (!canvasRef.current) return;
+    if (chartRef.current) chartRef.current.destroy();
+    chartRef.current = new Chart(canvasRef.current, config);
+    return function () { if (chartRef.current) chartRef.current.destroy(); };
+  }, [depsKey]);
+}
+
+/* ============================ SMALL COMPONENTS ============================ */
+
+function QuoteBanner() {
+  var q = getDailyQuote();
+  return (
+    <div className="bg-gradient-to-r from-emerald-700 via-teal-700 to-amber-600 text-white px-4 py-3 rounded-lg mb-4 shadow">
+      <p className="italic text-sm md:text-base">"{q.text}"</p>
+      <p className="text-xs md:text-sm mt-1 text-amber-100">- {q.author}</p>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="text-center text-xs text-stone-400 py-6 mt-8 border-t border-stone-200">
+      Designed and Developed by Electrical Engineer Mohamad Hussein Ali Issa
+    </footer>
+  );
+}
+
+function Header(props) {
+  var tabs = [
+    { key: "main", label: "Monthly Allocation" },
+    { key: "dashboard", label: "Dashboard and Totals" },
+    { key: "progress", label: "Progress Chart" },
+    { key: "settings", label: "Settings" }
+  ];
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(function (t) {
+          return (
+            <button key={t.key} onClick={function () { props.setView(t.key); }}
+              className={"px-4 py-2 rounded-lg font-semibold text-sm " + (props.view === t.key ? "bg-emerald-700 text-white" : "bg-white text-emerald-800 border border-emerald-200")}>
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className={"text-xs px-3 py-1 rounded-full " + (props.syncActive ? "bg-teal-100 text-teal-800" : "bg-stone-100 text-stone-500")}>
+          {props.syncLabel}
+        </div>
+        {props.onSignIn ? (
+          <button onClick={props.onSignIn} className="text-xs px-3 py-1 rounded-full bg-emerald-700 text-white">Sign In to Sync</button>
+        ) : null}
+        {props.onSignOut ? (
+          <button onClick={props.onSignOut} className="text-xs px-3 py-1 rounded-full border border-stone-300 bg-white text-stone-600">Sign Out</button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MonthChangeNotice(props) {
+  var data = props.data; var setData = props.setData;
+  function handleYes() {
+    var archived = { id: uid(), date: todayISO(), monthLabel: data.currentMonth.monthLabel, salary: data.currentMonth.salary, categories: data.currentMonth.categories };
+    var freshCats = recalcForSalary(data.template.map(function (c) { return Object.assign({}, c); }), 0);
+    setData(Object.assign({}, data, {
+      history: data.history.concat([archived]),
+      currentMonth: { salary: 0, salaryInput: "", presentUsageAdded: 0, categories: freshCats, monthLabel: currentMonthLabel() }
+    }));
+    props.onDismiss();
+  }
+  return (
+    <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded-lg p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div>A new month has started but {data.currentMonth.monthLabel} still has unarchived data. Archive it now and start fresh?</div>
+      <div className="flex gap-2">
+        <button onClick={handleYes} className="bg-emerald-700 text-white px-3 py-1 rounded">Yes, Archive</button>
+        <button onClick={props.onDismiss} className="bg-white border border-stone-300 px-3 py-1 rounded">Not Yet</button>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ ALLOCATION TABLE ============================ */
+
+function AllocationTable(props) {
+  var categories = props.categories; var onChange = props.onChange; var showMethod = props.showMethod; var salary = props.salary;
+
+  function updateRow(id, patch) {
+    onChange(categories.map(function (c) {
+      if (c.id !== id) return c;
+      var merged = Object.assign({}, c, patch);
+      if (patch.percent !== undefined && merged.method !== "fixed") merged.amount = salary * (merged.percent / 100) + (merged.method === "hybrid" ? merged.fixedAmount : 0);
+      if (patch.amount !== undefined && merged.method === "percentage") merged.percent = salary > 0 ? (merged.amount / salary) * 100 : 0;
+      if (patch.fixedAmount !== undefined) {
+        if (merged.method === "fixed") merged.amount = merged.fixedAmount;
+        if (merged.method === "hybrid") merged.amount = merged.fixedAmount + salary * (merged.percent / 100);
+      }
+      if (patch.method !== undefined) {
+        if (patch.method === "fixed") merged.amount = merged.fixedAmount;
+        else if (patch.method === "hybrid") merged.amount = merged.fixedAmount + salary * (merged.percent / 100);
+        else merged.amount = salary * (merged.percent / 100);
+      }
+      return merged;
+    }));
+  }
+
+  function updateSource(id, key, value) {
+    onChange(categories.map(function (c) {
+      if (c.id !== id) return c;
+      var s = Object.assign({}, c.sources);
+      s[key] = value;
+      return Object.assign({}, c, { sources: s });
+    }));
+  }
+
+  function moveRow(id, dir) {
+    var idx = categories.findIndex(function (c) { return c.id === id; });
+    var newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= categories.length) return;
+    var updated = categories.slice();
+    var tmp = updated[idx]; updated[idx] = updated[newIdx]; updated[newIdx] = tmp;
+    onChange(updated);
+  }
+
+  function removeRow(id) { onChange(categories.filter(function (c) { return c.id !== id; })); }
+  function addCategory() { onChange(categories.concat([makeCategory("New Category")])); }
+
+  var totalPercent = categories.reduce(function (s, c) { return c.included && c.sources.salary ? s + c.percent : s; }, 0);
+  var totalAmount = categories.reduce(function (s, c) { return c.included && c.sources.salary ? s + c.amount : s; }, 0);
+
+  return (
+    <div className="overflow-x-auto bg-white rounded-xl border border-stone-200 shadow-sm">
+      <table className="min-w-full text-sm">
+        <thead className="bg-emerald-50 text-emerald-900">
+          <tr>
+            <th className="p-2 text-left">Category</th>
+            {showMethod ? <th className="p-2 text-left">Method</th> : null}
+            {showMethod ? <th className="p-2 text-left">Type</th> : null}
+            <th className="p-2 text-left">%</th>
+            {showMethod ? <th className="p-2 text-left">Fixed $</th> : null}
+            <th className="p-2 text-left">Amount $</th>
+            <th className="p-2 text-left">Notes</th>
+            <th className="p-2 text-left">Include</th>
+            {showMethod ? <th className="p-2 text-left">Sources</th> : null}
+            <th className="p-2 text-left">Order</th>
+            <th className="p-2 text-left"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {categories.map(function (c, i) {
+            return (
+              <tr key={c.id} className="border-t border-stone-100">
+                <td className="p-2"><input className="border border-stone-300 rounded px-2 py-1 w-40" value={c.name} onChange={function (e) { updateRow(c.id, { name: e.target.value }); }} /></td>
+                {showMethod ? (
+                  <td className="p-2">
+                    <select className="border border-stone-300 rounded px-2 py-1" value={c.method} onChange={function (e) { updateRow(c.id, { method: e.target.value }); }}>
+                      <option value="percentage">Percentage</option>
+                      <option value="fixed">Fixed</option>
+                      <option value="hybrid">Hybrid</option>
+                    </select>
+                  </td>
+                ) : null}
+                {showMethod ? (
+                  <td className="p-2">
+                    <select className="border border-stone-300 rounded px-2 py-1" value={c.type} onChange={function (e) { updateRow(c.id, { type: e.target.value }); }}>
+                      <option value="expense">Expense</option>
+                      <option value="savings">Savings</option>
+                      <option value="investment">Investment</option>
+                      <option value="personalInvestment">Personal Investment</option>
+                      <option value="income">Income</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </td>
+                ) : null}
+                <td className="p-2"><input type="number" step="0.01" className="border border-stone-300 rounded px-2 py-1 w-20" value={c.percent} onChange={function (e) { updateRow(c.id, { percent: parseFloat(e.target.value) || 0 }); }} /></td>
+                {showMethod ? (
+                  <td className="p-2"><input type="number" step="0.01" className="border border-stone-300 rounded px-2 py-1 w-24" value={c.fixedAmount} onChange={function (e) { updateRow(c.id, { fixedAmount: parseFloat(e.target.value) || 0 }); }} /></td>
+                ) : null}
+                <td className="p-2"><input type="number" step="0.01" className="border border-stone-300 rounded px-2 py-1 w-24" value={Math.round(c.amount * 100) / 100} onChange={function (e) { updateRow(c.id, { amount: parseFloat(e.target.value) || 0 }); }} /></td>
+                <td className="p-2"><input className="border border-stone-300 rounded px-2 py-1 w-40" value={c.notes} onChange={function (e) { updateRow(c.id, { notes: e.target.value }); }} /></td>
+                <td className="p-2 text-center"><input type="checkbox" checked={c.included} onChange={function (e) { updateRow(c.id, { included: e.target.checked }); }} /></td>
+                {showMethod ? (
+                  <td className="p-2">
+                    <div className="flex flex-col gap-1 text-xs">
+                      {["salary", "business", "investment", "bonus", "other"].map(function (key) {
+                        return (
+                          <label key={key} className="flex items-center gap-1">
+                            <input type="checkbox" checked={c.sources[key]} onChange={function (e) { updateSource(c.id, key, e.target.checked); }} />
+                            {key}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </td>
+                ) : null}
+                <td className="p-2">
+                  <button onClick={function () { moveRow(c.id, -1); }} disabled={i === 0} className="px-2">Up</button>
+                  <button onClick={function () { moveRow(c.id, 1); }} disabled={i === categories.length - 1} className="px-2">Down</button>
+                </td>
+                <td className="p-2"><button onClick={function () { removeRow(c.id); }} className="text-rose-600">Remove</button></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="p-3 flex justify-between items-center border-t border-stone-200">
+        <button onClick={addCategory} className="bg-teal-700 text-white px-3 py-1 rounded">+ Add Category</button>
+        <div className="text-sm text-stone-600">Total: {totalPercent.toFixed(1)}% / ${totalAmount.toFixed(2)}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================ SIDEBAR + LOG ROWS ============================ */
+
+function TotalsSidebar(props) {
+  var data = props.data; var setData = props.setData;
+  var totals = aggregateTotals(data.history, data.adjustments, data.transfers, data.withdrawals);
+  var categoryNames = data.template.map(function (c) { return c.name; });
+
+  var [adjustCat, setAdjustCat] = React.useState(categoryNames[0] || "");
+  var [adjustAmt, setAdjustAmt] = React.useState("");
+  var [adjustNote, setAdjustNote] = React.useState("");
+  var [fromCat, setFromCat] = React.useState(categoryNames[0] || "");
+  var [toCat, setToCat] = React.useState(categoryNames[1] || categoryNames[0] || "");
+  var [transferAmt, setTransferAmt] = React.useState("");
+  var [transferNote, setTransferNote] = React.useState("");
+  var [puCat, setPuCat] = React.useState(categoryNames[0] || "");
+  var [puAmt, setPuAmt] = React.useState("");
+  var [puNote, setPuNote] = React.useState("");
+
+  function handleAdjust() {
+    var amt = parseFloat(adjustAmt); if (!amt) return;
+    setData(Object.assign({}, data, { adjustments: data.adjustments.concat([{ id: uid(), date: todayISO(), categoryName: adjustCat, amount: amt, note: adjustNote }]) }));
+    setAdjustAmt(""); setAdjustNote("");
+  }
+  function handleTransfer() {
+    var amt = parseFloat(transferAmt); if (!amt || fromCat === toCat) return;
+    setData(Object.assign({}, data, { transfers: data.transfers.concat([{ id: uid(), date: todayISO(), fromCategory: fromCat, toCategory: toCat, amount: amt, note: transferNote }]) }));
+    setTransferAmt(""); setTransferNote("");
+  }
+  function handlePresentUsage() {
+    var amt = parseFloat(puAmt); if (!amt) return;
+    setData(applyWithdrawal(data, puCat, amt, puNote));
+    setPuAmt(""); setPuNote("");
+  }
+
+  return (
+    <div className="bg-stone-100 rounded-xl p-4 border border-stone-200">
+      <h3 className="font-bold text-stone-700 mb-2">Stored Totals</h3>
+      <div className="space-y-1 mb-4 max-h-64 overflow-y-auto">
+        {categoryNames.map(function (name) {
+          var val = totals[name] || 0;
+          return (
+            <div key={name} className="flex justify-between text-sm">
+              <span className="text-stone-600">{name}</span>
+              <span className={val < 0 ? "text-rose-600 font-semibold" : "text-stone-800"}>${val.toFixed(2)}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="bg-white rounded-lg p-3 mb-3 border border-stone-200">
+        <h4 className="font-semibold text-sm mb-2 text-emerald-800">Adjust</h4>
+        <select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={adjustCat} onChange={function (e) { setAdjustCat(e.target.value); }}>
+          {categoryNames.map(function (n) { return <option key={n} value={n}>{n}</option>; })}
+        </select>
+        <input type="number" placeholder="Amount (+/-)" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={adjustAmt} onChange={function (e) { setAdjustAmt(e.target.value); }} />
+        <input placeholder="Note" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={adjustNote} onChange={function (e) { setAdjustNote(e.target.value); }} />
+        <button onClick={handleAdjust} className="bg-emerald-700 text-white rounded px-3 py-1 text-sm w-full">Apply Adjustment</button>
+      </div>
+
+      <div className="bg-white rounded-lg p-3 mb-3 border border-stone-200">
+        <h4 className="font-semibold text-sm mb-2 text-teal-800">Transfer Between Categories</h4>
+        <select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={fromCat} onChange={function (e) { setFromCat(e.target.value); }}>
+          {categoryNames.map(function (n) { return <option key={n} value={n}>{n}</option>; })}
+        </select>
+        <select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={toCat} onChange={function (e) { setToCat(e.target.value); }}>
+          {categoryNames.map(function (n) { return <option key={n} value={n}>{n}</option>; })}
+        </select>
+        <input type="number" placeholder="Amount" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={transferAmt} onChange={function (e) { setTransferAmt(e.target.value); }} />
+        <input placeholder="Note" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={transferNote} onChange={function (e) { setTransferNote(e.target.value); }} />
+        <button onClick={handleTransfer} className="bg-teal-700 text-white rounded px-3 py-1 text-sm w-full">Apply Transfer</button>
+      </div>
+
+      <div className="bg-white rounded-lg p-3 border border-stone-200">
+        <h4 className="font-semibold text-sm mb-2 text-amber-700">Send to Present Usage</h4>
+        <p className="text-xs text-stone-500 mb-1">Added to this month so far: ${data.currentMonth.presentUsageAdded.toFixed(2)}</p>
+        <select className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={puCat} onChange={function (e) { setPuCat(e.target.value); }}>
+          {categoryNames.map(function (n) { return <option key={n} value={n}>{n}</option>; })}
+        </select>
+        <input type="number" placeholder="Amount" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={puAmt} onChange={function (e) { setPuAmt(e.target.value); }} />
+        <input placeholder="Note" className="w-full border border-stone-300 rounded px-2 py-1 mb-1 text-sm" value={puNote} onChange={function (e) { setPuNote(e.target.value); }} />
+        <button onClick={handlePresentUsage} className="bg-amber-600 text-white rounded px-3 py-1 text-sm w-full">Withdraw to This Month</button>
+      </div>
+    </div>
+  );
+}
+
+function AdjustmentRow(props) {
+  var a = props.a; var data = props.data; var setData = props.setData;
+  var [editing, setEditing] = React.useState(false);
+  var [cat, setCat] = React.useState(a.categoryName);
+  var [amt, setAmt] = React.useState(a.amount);
+  var [note, setNote] = React.useState(a.note);
+  function save() {
+    setData(Object.assign({}, data, { adjustments: data.adjustments.map(function (x) { return x.id === a.id ? Object.assign({}, x, { categoryName: cat, amount: parseFloat(amt) || 0, note: note }) : x; }) }));
+    setEditing(false);
+  }
+  function del() { setData(Object.assign({}, data, { adjustments: data.adjustments.filter(function (x) { return x.id !== a.id; }) })); }
+  if (editing) {
+    return (
+      <tr>
+        <td className="p-1">{a.date}</td>
+        <td className="p-1"><input className="border rounded px-1 w-32" value={cat} onChange={function (e) { setCat(e.target.value); }} /></td>
+        <td className="p-1"><input type="number" className="border rounded px-1 w-20" value={amt} onChange={function (e) { setAmt(e.target.value); }} /></td>
+        <td className="p-1"><input className="border rounded px-1 w-32" value={note} onChange={function (e) { setNote(e.target.value); }} /></td>
+        <td className="p-1"><button onClick={save} className="text-emerald-700 mr-2">Save</button><button onClick={function () { setEditing(false); }} className="text-stone-500">Cancel</button></td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td className="p-1">{a.date}</td><td className="p-1">{a.categoryName}</td>
+      <td className={"p-1 " + (a.amount < 0 ? "text-rose-600" : "")}>${a.amount.toFixed(2)}</td>
+      <td className="p-1">{a.note}</td>
+      <td className="p-1"><button onClick={function () { setEditing(true); }} className="text-emerald-700 mr-2">Edit</button><button onClick={del} className="text-rose-600">Delete</button></td>
+    </tr>
+  );
+}
+
+function TransferRow(props) {
+  var t = props.t; var data = props.data; var setData = props.setData;
+  var [editing, setEditing] = React.useState(false);
+  var [from, setFrom] = React.useState(t.fromCategory);
+  var [to, setTo] = React.useState(t.toCategory);
+  var [amt, setAmt] = React.useState(t.amount);
+  var [note, setNote] = React.useState(t.note);
+  function save() {
+    setData(Object.assign({}, data, { transfers: data.transfers.map(function (x) { return x.id === t.id ? Object.assign({}, x, { fromCategory: from, toCategory: to, amount: parseFloat(amt) || 0, note: note }) : x; }) }));
+    setEditing(false);
+  }
+  function del() { setData(Object.assign({}, data, { transfers: data.transfers.filter(function (x) { return x.id !== t.id; }) })); }
+  if (editing) {
+    return (
+      <tr>
+        <td className="p-1">{t.date}</td>
+        <td className="p-1"><input className="border rounded px-1 w-28" value={from} onChange={function (e) { setFrom(e.target.value); }} /></td>
+        <td className="p-1"><input className="border rounded px-1 w-28" value={to} onChange={function (e) { setTo(e.target.value); }} /></td>
+        <td className="p-1"><input type="number" className="border rounded px-1 w-20" value={amt} onChange={function (e) { setAmt(e.target.value); }} /></td>
+        <td className="p-1"><input className="border rounded px-1 w-28" value={note} onChange={function (e) { setNote(e.target.value); }} /></td>
+        <td className="p-1"><button onClick={save} className="text-emerald-700 mr-2">Save</button><button onClick={function () { setEditing(false); }} className="text-stone-500">Cancel</button></td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td className="p-1">{t.date}</td><td className="p-1">{t.fromCategory}</td><td className="p-1">{t.toCategory}</td>
+      <td className="p-1">${t.amount.toFixed(2)}</td><td className="p-1">{t.note}</td>
+      <td className="p-1"><button onClick={function () { setEditing(true); }} className="text-emerald-700 mr-2">Edit</button><button onClick={del} className="text-rose-600">Delete</button></td>
+    </tr>
+  );
+}
+
+function WithdrawalRow(props) {
+  var w = props.w; var data = props.data; var setData = props.setData;
+  var [editing, setEditing] = React.useState(false);
+  var [cat, setCat] = React.useState(w.fromCategory);
+  var [amt, setAmt] = React.useState(w.amount);
+  var [note, setNote] = React.useState(w.note);
+  var locked = w.monthLabel !== data.currentMonth.monthLabel;
+  function save() { setData(applyEditedWithdrawal(data, w, cat, parseFloat(amt) || 0, note)); setEditing(false); }
+  function undo() { setData(undoWithdrawalEffect(data, w)); }
+  if (locked) {
+    return (
+      <tr>
+        <td className="p-1">{w.date}</td><td className="p-1">{w.fromCategory}</td><td className="p-1">${w.amount.toFixed(2)}</td>
+        <td className="p-1">{w.note}</td><td className="p-1 text-stone-400 italic">Locked (part of {w.monthLabel})</td>
+      </tr>
+    );
+  }
+  if (editing) {
+    return (
+      <tr>
+        <td className="p-1">{w.date}</td>
+        <td className="p-1"><input className="border rounded px-1 w-28" value={cat} onChange={function (e) { setCat(e.target.value); }} /></td>
+        <td className="p-1"><input type="number" className="border rounded px-1 w-20" value={amt} onChange={function (e) { setAmt(e.target.value); }} /></td>
+        <td className="p-1"><input className="border rounded px-1 w-28" value={note} onChange={function (e) { setNote(e.target.value); }} /></td>
+        <td className="p-1"><button onClick={save} className="text-emerald-700 mr-2">Save</button><button onClick={function () { setEditing(false); }} className="text-stone-500">Cancel</button></td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td className="p-1">{w.date}</td><td className="p-1">{w.fromCategory}</td><td className="p-1">${w.amount.toFixed(2)}</td>
+      <td className="p-1">{w.note}</td>
+      <td className="p-1"><button onClick={function () { setEditing(true); }} className="text-emerald-700 mr-2">Edit</button><button onClick={undo} className="text-rose-600">Undo</button></td>
+    </tr>
+  );
+}
+
+function HistoryEntryCard(props) {
+  var h = props.h; var data = props.data; var setData = props.setData;
+  var [editing, setEditing] = React.useState(false);
+  var [cats, setCats] = React.useState(h.categories);
+  function save() { setData(Object.assign({}, data, { history: data.history.map(function (x) { return x.id === h.id ? Object.assign({}, x, { categories: cats }) : x; }) })); setEditing(false); }
+  function del() { setData(Object.assign({}, data, { history: data.history.filter(function (x) { return x.id !== h.id; }) })); }
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-4 mb-3">
+      <div className="flex justify-between items-center mb-2">
+        <h4 className="font-bold text-emerald-800">{h.monthLabel} - Salary ${h.salary.toFixed(2)}</h4>
+        <div>
+          {editing ? (
+            <React.Fragment>
+              <button onClick={save} className="text-emerald-700 mr-2">Save</button>
+              <button onClick={function () { setEditing(false); setCats(h.categories); }} className="text-stone-500 mr-2">Cancel</button>
+            </React.Fragment>
+          ) : (<button onClick={function () { setEditing(true); }} className="text-emerald-700 mr-2">Edit This Month</button>)}
+          <button onClick={del} className="text-rose-600">Delete This Month</button>
+        </div>
+      </div>
+      {editing ? (
+        <AllocationTable categories={cats} onChange={setCats} showMethod={true} salary={h.salary} />
+      ) : (
+        <div className="text-sm text-stone-600 grid grid-cols-2 md:grid-cols-3 gap-1">
+          {h.categories.filter(function (c) { return c.included; }).map(function (c) { return <div key={c.id}>{c.name}: ${c.amount.toFixed(2)}</div>; })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResetDatabaseButton(props) {
+  var setData = props.setData;
+  function handleReset() {
+    var pw = window.prompt("Enter password to reset the entire database:");
+    if (pw !== "2007") { if (pw !== null) window.alert("Incorrect password. Nothing was changed."); return; }
+    if (!window.confirm("This will permanently delete ALL history, adjustments, transfers, withdrawals, and your template. This cannot be undone. Continue?")) return;
+    setData(freshData());
+  }
+  return (
+    <div className="bg-rose-50 border border-rose-300 rounded-xl p-4 mt-6">
+      <h3 className="font-bold text-rose-700 mb-2">Danger Zone</h3>
+      <p className="text-sm text-rose-600 mb-3">This will erase everything and cannot be undone.</p>
+      <button onClick={handleReset} className="bg-rose-600 text-white px-4 py-2 rounded">Reset Entire Database</button>
+    </div>
+  );
+}
+
+function ExcelExportPanel(props) {
+  var data = props.data;
+  var months = sortedMonthLabels(data.history);
+  var [from, setFrom] = React.useState(months[0] || "");
+  var [to, setTo] = React.useState(months[months.length - 1] || "");
+  var [working, setWorking] = React.useState(false);
+
+  if (months.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4">
+        <h3 className="font-bold text-emerald-800 mb-1">Download Excel Report</h3>
+        <p className="text-sm text-stone-500">Archive at least one month first to enable Excel export.</p>
+      </div>
+    );
+  }
+  if (typeof ExcelJS === "undefined") {
+    return (
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4">
+        <h3 className="font-bold text-emerald-800 mb-1">Download Excel Report</h3>
+        <p className="text-sm text-rose-500">Excel library did not load. Check your internet connection and reload the page.</p>
+      </div>
+    );
+  }
+  function handleDownload() {
+    setWorking(true);
+    generateExcelReport(data, from, to).then(function () { setWorking(false); }).catch(function (e) {
+      console.error(e); setWorking(false); window.alert("Could not generate the report. See console for details.");
+    });
+  }
+  return (
+    <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4">
+      <h3 className="font-bold text-emerald-800 mb-2">Download Excel Report</h3>
+      <div className="flex flex-wrap gap-2 items-center mb-2">
+        <label className="text-sm">From</label>
+        <select className="border border-stone-300 rounded px-2 py-1" value={from} onChange={function (e) { setFrom(e.target.value); }}>
+          {months.map(function (m) { return <option key={m} value={m}>{m}</option>; })}
+        </select>
+        <label className="text-sm">To</label>
+        <select className="border border-stone-300 rounded px-2 py-1" value={to} onChange={function (e) { setTo(e.target.value); }}>
+          {months.map(function (m) { return <option key={m} value={m}>{m}</option>; })}
+        </select>
+      </div>
+      <button onClick={handleDownload} disabled={working} className="bg-teal-700 text-white px-4 py-2 rounded">{working ? "Preparing..." : "Download Excel Report (.xlsx)"}</button>
+    </div>
+  );
+}
+
+/* ============================ PAGES ============================ */
+
+function SettingsPage(props) {
+  var data = props.data; var setData = props.setData;
+  var [name, setName] = React.useState(data.ownerName);
+  function handleTemplateChange(newCats) { setData(Object.assign({}, data, { template: newCats })); }
+  function saveName() { setData(Object.assign({}, data, { ownerName: name })); }
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-emerald-800 mb-3">Budget and Allocation Settings</h2>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4">
+        <label className="block text-sm text-stone-600 mb-1">Your Name (for report headers)</label>
+        <div className="flex gap-2">
+          <input className="border border-stone-300 rounded px-2 py-1 flex-1" value={name} onChange={function (e) { setName(e.target.value); }} />
+          <button onClick={saveName} className="bg-emerald-700 text-white px-3 py-1 rounded">Save Name</button>
+        </div>
+      </div>
+      <AllocationTable categories={data.template} onChange={handleTemplateChange} showMethod={true} salary={0} />
+      <p className="text-xs text-stone-500 mt-2">Changes here apply to future months only. Past saved months are never changed.</p>
+    </div>
+  );
+}
+
+function DashboardPage(props) {
+  var data = props.data; var setData = props.setData;
+  var totalSalary = data.history.reduce(function (s, h) { return s + h.salary; }, 0);
+  var totals = aggregateTotals(data.history, data.adjustments, data.transfers, data.withdrawals);
+  var netTotal = Object.keys(totals).reduce(function (s, k) { return s + totals[k]; }, 0);
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-emerald-800 mb-3">Dashboard and Totals</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Total Salary Recorded</div><div className="text-2xl font-bold text-emerald-700">${totalSalary.toFixed(2)}</div></div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Net Total Allocated</div><div className="text-2xl font-bold text-teal-700">${netTotal.toFixed(2)}</div></div>
+        <div className="bg-white rounded-xl border border-stone-200 p-4"><div className="text-stone-500 text-sm">Months Closed</div><div className="text-2xl font-bold text-amber-700">{data.history.length}</div></div>
+      </div>
+      <ExcelExportPanel data={data} />
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto">
+        <h3 className="font-bold text-emerald-800 mb-2">Category Totals</h3>
+        <table className="w-full text-sm"><tbody>
+          {Object.keys(totals).map(function (name) { return (<tr key={name} className="border-t border-stone-100"><td className="p-1">{name}</td><td className={"p-1 " + (totals[name] < 0 ? "text-rose-600 font-semibold" : "")}>${totals[name].toFixed(2)}</td></tr>); })}
+        </tbody></table>
+      </div>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto">
+        <h3 className="font-bold text-teal-800 mb-2">Transfers</h3>
+        <table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">From</th><th className="text-left p-1">To</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead>
+          <tbody>{data.transfers.map(function (t) { return <TransferRow key={t.id} t={t} data={data} setData={setData} />; })}</tbody></table>
+      </div>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto">
+        <h3 className="font-bold text-emerald-800 mb-2">Adjustments</h3>
+        <table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">Category</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead>
+          <tbody>{data.adjustments.map(function (a) { return <AdjustmentRow key={a.id} a={a} data={data} setData={setData} />; })}</tbody></table>
+      </div>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4 overflow-x-auto">
+        <h3 className="font-bold text-amber-700 mb-2">Present Usage Withdrawals</h3>
+        <table className="w-full text-sm"><thead><tr><th className="text-left p-1">Date</th><th className="text-left p-1">From</th><th className="text-left p-1">Amount</th><th className="text-left p-1">Note</th><th></th></tr></thead>
+          <tbody>{data.withdrawals.map(function (w) { return <WithdrawalRow key={w.id} w={w} data={data} setData={setData} />; })}</tbody></table>
+      </div>
+      <div className="mb-4">
+        <h3 className="font-bold text-emerald-800 mb-2">Month-by-Month History</h3>
+        {data.history.slice().reverse().map(function (h) { return <HistoryEntryCard key={h.id} h={h} data={data} setData={setData} />; })}
+        {data.history.length === 0 ? <p className="text-sm text-stone-500">No months archived yet.</p> : null}
+      </div>
+      <ResetDatabaseButton setData={setData} />
+    </div>
+  );
+}
+
+function ProgressPage(props) {
+  var data = props.data;
+  var sorted = data.history.slice().sort(function (a, b) { return monthLabelToIndex(a.monthLabel) - monthLabelToIndex(b.monthLabel); });
+  var barRef = React.useRef(null); var lineRef = React.useRef(null);
+  function sumType(h, type) { return h.categories.filter(function (c) { return c.included && c.type === type; }).reduce(function (s, c) { return s + c.amount; }, 0); }
+  function cumulative(arr) { var out = []; var running = 0; arr.forEach(function (v) { running += v; out.push(running); }); return out; }
+
+  var labels = sorted.map(function (h) { return h.monthLabel; });
+  var salaryArr = sorted.map(function (h) { return h.salary; });
+  var expenseArr = sorted.map(function (h) { return sumType(h, "expense"); });
+  var savingsArr = sorted.map(function (h) { return sumType(h, "savings"); });
+  var investArr = sorted.map(function (h) { return sumType(h, "investment"); });
+  var persInvArr = sorted.map(function (h) { return sumType(h, "personalInvestment"); });
+  var cumSavings = cumulative(savingsArr); var cumInvest = cumulative(investArr); var cumPersInv = cumulative(persInvArr);
+  var cumTotal = cumSavings.map(function (v, i) { return v + cumInvest[i] + cumPersInv[i]; });
+
+  useChartInstance(barRef, { type: "bar", data: { labels: labels, datasets: [
+    { label: "Salary", data: salaryArr, backgroundColor: "#065f46" },
+    { label: "Expenses", data: expenseArr, backgroundColor: "#f43f5e" },
+    { label: "Savings", data: savingsArr, backgroundColor: "#0d9488" },
+    { label: "Investments", data: investArr, backgroundColor: "#ca8a04" },
+    { label: "Personal Investments", data: persInvArr, backgroundColor: "#7e22ce" }
+  ] }, options: { responsive: true } }, [JSON.stringify(labels), JSON.stringify(salaryArr)]);
+
+  useChartInstance(lineRef, { type: "line", data: { labels: labels, datasets: [
+    { label: "Cumulative Savings", data: cumSavings, borderColor: "#0d9488", fill: false },
+    { label: "Cumulative Investments", data: cumInvest, borderColor: "#ca8a04", fill: false },
+    { label: "Cumulative Personal Investments", data: cumPersInv, borderColor: "#7e22ce", fill: false },
+    { label: "Total Wealth Growth", data: cumTotal, borderColor: "#065f46", fill: false, borderWidth: 3 }
+  ] }, options: { responsive: true } }, [JSON.stringify(labels), JSON.stringify(cumTotal)]);
+
+  if (sorted.length === 0) return <div className="bg-white rounded-xl border border-stone-200 p-6 text-stone-500">Archive at least one month to see your progress chart here.</div>;
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-emerald-800 mb-3">Progress Chart</h2>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4"><canvas ref={barRef}></canvas></div>
+      <div className="bg-white rounded-xl border border-stone-200 p-4"><canvas ref={lineRef}></canvas></div>
+    </div>
+  );
+}
+
+function MainPage(props) {
+  var data = props.data; var setData = props.setData; var setView = props.setView;
+  var cm = data.currentMonth;
+
+  function handleSalaryChange(e) {
+    var val = e.target.value; var num = parseFloat(val) || 0;
+    setData(Object.assign({}, data, { currentMonth: Object.assign({}, cm, { salary: num, salaryInput: val, categories: recalcForSalary(cm.categories, num) }) }));
+  }
+  function handleCategoriesChange(newCats) { setData(Object.assign({}, data, { currentMonth: Object.assign({}, cm, { categories: newCats }) })); }
+  function saveDraft() { window.alert("Draft saved. This does not affect your permanent totals until you End Month and Archive."); }
+  function saveAsDefault() { setData(Object.assign({}, data, { template: cm.categories.map(function (c) { return Object.assign({}, c); }) })); window.alert("Saved as your default template for future months."); }
+  function resetToTemplate() { setData(Object.assign({}, data, { currentMonth: Object.assign({}, cm, { categories: recalcForSalary(data.template.map(function (c) { return Object.assign({}, c); }), cm.salary) }) })); }
+  function endMonthAndArchive() {
+    if (!window.confirm("Archive " + cm.monthLabel + " into permanent history and start a new month?")) return;
+    var archived = { id: uid(), date: todayISO(), monthLabel: cm.monthLabel, salary: cm.salary, categories: cm.categories };
+    var freshCats = recalcForSalary(data.template.map(function (c) { return Object.assign({}, c); }), 0);
+    setData(Object.assign({}, data, { history: data.history.concat([archived]), currentMonth: { salary: 0, salaryInput: "", presentUsageAdded: 0, categories: freshCats, monthLabel: currentMonthLabel() } }));
+  }
+
+  var activeCats = cm.categories.filter(function (c) { return c.included && c.sources && c.sources.salary; });
+  var totalPercent = activeCats.reduce(function (s, c) { return s + c.percent; }, 0);
+  var totalAmount = activeCats.reduce(function (s, c) { return s + c.amount; }, 0);
+  var remaining = cm.salary - totalAmount;
+  var overPercent = totalPercent > 100.05;
+  var overAmount = totalAmount > cm.salary + 0.01;
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-emerald-800 mb-3">Monthly Allocation - {cm.monthLabel}</h2>
+      <div className="bg-white rounded-xl border border-stone-200 p-4 mb-4">
+        <label className="block text-sm text-stone-600 mb-1">Monthly Salary</label>
+        <input type="number" className="border border-stone-300 rounded px-3 py-2 w-48" value={cm.salaryInput} onChange={handleSalaryChange} placeholder="Enter salary, e.g. 2500" />
+        {cm.presentUsageAdded > 0 ? <p className="text-sm text-amber-700 mt-2">+ ${cm.presentUsageAdded.toFixed(2)} added this month from Present Usage withdrawals</p> : null}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <div className={"rounded-lg p-3 border " + (overPercent ? "bg-rose-50 border-rose-300" : "bg-white border-stone-200")}>
+          <div className="text-xs text-stone-500">Total Allocated %</div>
+          <div className={"text-lg font-bold " + (overPercent ? "text-rose-600" : "text-emerald-700")}>{totalPercent.toFixed(1)}%</div>
+        </div>
+        <div className={"rounded-lg p-3 border " + (overAmount ? "bg-rose-50 border-rose-300" : "bg-white border-stone-200")}>
+          <div className="text-xs text-stone-500">Total Allocated $</div>
+          <div className={"text-lg font-bold " + (overAmount ? "text-rose-600" : "text-teal-700")}>${totalAmount.toFixed(2)}</div>
+        </div>
+        <div className="rounded-lg p-3 border bg-white border-stone-200">
+          <div className="text-xs text-stone-500">Remaining Unallocated</div>
+          <div className="text-lg font-bold text-amber-700">${remaining.toFixed(2)}</div>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <AllocationTable categories={cm.categories} onChange={handleCategoriesChange} showMethod={false} salary={cm.salary} />
+          <div className="flex flex-wrap gap-2 mt-4">
+            <button onClick={saveDraft} className="bg-stone-600 text-white px-3 py-2 rounded">Save This Month's Draft</button>
+            <button onClick={endMonthAndArchive} className="bg-emerald-700 text-white px-3 py-2 rounded">End Month and Archive to Database</button>
+            <button onClick={saveAsDefault} className="bg-teal-700 text-white px-3 py-2 rounded">Save as Default Template</button>
+            <button onClick={resetToTemplate} className="bg-amber-600 text-white px-3 py-2 rounded">Reset to Saved Template</button>
+            <button onClick={function () {}} className="bg-stone-200 text-stone-700 px-3 py-2 rounded">Customize This Month</button>
+            <button onClick={function () { setView("settings"); }} className="bg-stone-200 text-stone-700 px-3 py-2 rounded">Edit Categories and Percentages</button>
+          </div>
+        </div>
+        <div className="lg:col-span-1"><TotalsSidebar data={data} setData={setData} /></div>
+      </div>
+    </div>
+  );
+}
+
+function App(props) {
+  var data = props.data; var setData = props.setData;
+  var [view, setView] = React.useState("main");
+  var [noticeDismissed, setNoticeDismissed] = React.useState(false);
+  var needsNotice = data.currentMonth.monthLabel !== currentMonthLabel() &&
+    (data.currentMonth.salary > 0 || data.currentMonth.categories.some(function (c) { return c.amount !== 0; })) &&
+    !noticeDismissed;
+
+  return (
+    <div className="min-h-screen bg-stone-50 px-4 py-4 max-w-6xl mx-auto">
+      <Header view={view} setView={setView} syncActive={props.syncActive} syncLabel={props.syncLabel} onSignIn={props.onSignIn} onSignOut={props.onSignOut} />
+      {props.saveWarning ? (
+        <div className="bg-rose-50 border border-rose-300 text-rose-700 rounded-lg p-3 mb-4 text-sm font-semibold">
+          Warning: a save to the cloud failed: {props.saveWarning}. Your changes are still saved on this device.
+        </div>
+      ) : null}
+      <QuoteBanner />
+      {needsNotice ? <MonthChangeNotice data={data} setData={setData} onDismiss={function () { setNoticeDismissed(true); }} /> : null}
+      {view === "main" ? <MainPage data={data} setData={setData} setView={setView} /> : null}
+      {view === "dashboard" ? <DashboardPage data={data} setData={setData} /> : null}
+      {view === "progress" ? <ProgressPage data={data} /> : null}
+      {view === "settings" ? <SettingsPage data={data} setData={setData} /> : null}
+      <Footer />
+    </div>
+  );
+}
+
+/* ============================ OPTIONAL LOGIN + SYNC ROOT ============================ */
+
+function LoginScreen(props) {
+  var React = window.React;
+  var useState = React.useState;
+
+  var emailState = useState("");
+  var email = emailState[0];
+  var setEmail = emailState[1];
+
+  var passwordState = useState("");
+  var password = passwordState[0];
+  var setPassword = passwordState[1];
+
+  var errState = useState("");
+  var err = errState[0];
+  var setErr = errState[1];
+
+  var busyState = useState(false);
+  var busy = busyState[0];
+  var setBusy = busyState[1];
+
+  function handleSubmit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    setErr("");
+
+    if (!email || !email.trim()) {
+      setErr("Please type your Email address in the top box.");
+      return;
+    }
+    if (!password || !password.trim()) {
+      setErr("Please type your Password in the bottom box.");
+      return;
+    }
+
+    setBusy(true);
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+      .then(function () {
+        return firebase.auth().signInWithEmailAndPassword(email.trim(), password);
+      })
+      .then(function () {
+        setBusy(false);
+      })
+      .catch(function (error) {
+        setBusy(false);
+        setErr(error && error.message ? error.message : "Sign in failed. Please check your email and password.");
+      });
+  }
+
+  return React.createElement(
+    "div",
+    { style: { minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f3ef", padding: "20px" } },
+    React.createElement(
+      "form",
+      { onSubmit: handleSubmit, style: { background: "#ffffff", padding: "30px", borderRadius: "12px", boxShadow: "0 2px 10px rgba(0,0,0,0.15)", width: "100%", maxWidth: "380px" } },
+      React.createElement("h2", { style: { marginBottom: "8px", color: "#065f46", fontSize: "22px", fontWeight: "bold" } }, "Sign In to Sync"),
+      React.createElement("p", { style: { marginBottom: "20px", color: "#78716c", fontSize: "13px" } }, "Optional. Signing in links this device to your other devices. Skip it to keep this device separate."),
+
+      React.createElement("label", { style: { display: "block", fontWeight: "bold", marginBottom: "6px", color: "#1f2937" } }, "Email"),
+      React.createElement("input", {
+        type: "email",
+        value: email,
+        autoFocus: true,
+        placeholder: "e.g. mohamad@mybudget.com",
+        onChange: function (e) { setEmail(e.target.value); },
+        style: { width: "100%", padding: "12px", marginBottom: "18px", border: "2px solid #0d9488", borderRadius: "8px", fontSize: "16px", boxSizing: "border-box" }
+      }),
+
+      React.createElement("label", { style: { display: "block", fontWeight: "bold", marginBottom: "6px", color: "#1f2937" } }, "Password"),
+      React.createElement("input", {
+        type: "password",
+        value: password,
+        placeholder: "Your password",
+        onChange: function (e) { setPassword(e.target.value); },
+        style: { width: "100%", padding: "12px", marginBottom: "18px", border: "2px solid #0d9488", borderRadius: "8px", fontSize: "16px", boxSizing: "border-box" }
+      }),
+
+      err ? React.createElement("div", { style: { color: "#dc2626", marginBottom: "14px", fontWeight: "bold", fontSize: "14px" } }, err) : null,
+
+      React.createElement(
+        "button",
+        {
+          type: "submit",
+          disabled: busy,
+          style: { width: "100%", padding: "12px", background: "#0f766e", color: "#ffffff", border: "none", borderRadius: "8px", fontSize: "16px", fontWeight: "bold", cursor: "pointer" }
+        },
+        busy ? "Signing in..." : "Sign In"
+      ),
+
+      props.onBack ? React.createElement("button", { type: "button", onClick: props.onBack, style: { width: "100%", marginTop: "10px", padding: "10px", background: "transparent", color: "#78716c", border: "none", fontSize: "14px", cursor: "pointer" } }, "Not now - use this device only") : null
     )
   );
 }
 
-function SyncRoot(){
-  var R=window.React;var US=R.useState;var UE=R.useEffect;var UR=R.useRef;
-  var[ready,setReady]=US(false);var uSync=isFirebaseConfigured();
-  var[au,setAu]=US(null);var[data,setDataState]=US(null);
-  var lsj=UR(null);var wt=UR(null);var hrr=UR(null);
+function SyncRoot() {
+  var React = window.React;
+  var useState = React.useState;
+  var useEffect = React.useEffect;
+  var useRef = React.useRef;
 
-  UE(function(){var ld=loadLocalData();setDataState(ld);if(!uSync){setReady(true);hrr.current=true}},[]);
-  UE(function(){if(!uSync)return;initFirebaseApp();var unsub=firebase.auth().onAuthStateChanged(function(u){setAu(u);setReady(true)});return function(){unsub()}},[uSync]);
+  var readyState = useState(false);
+  var ready = readyState[0];
+  var setReady = readyState[1];
 
-  // Sync listener
-  UE(function(){if(!uSync||!au)return;var db=getFirestoreDb();if(!db){hrr.current=true;return;}var dr=db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
-    console.log("[SYNC] Attaching listener...");
-    var unsub=dr.onSnapshot(function(snap){
-      console.log("[SYNC] Snapshot:",snap.exists?"exists":"empty");
-      if(snap.exists){var rd=snap.data(),rp=rd&&rd.payload?rd.payload:null;if(rp){var rs=JSON.stringify(rp);if(rs!==lsj.current){try{var mg=migrate(rp);lsj.current=JSON.stringify(mg);setDataState(mg);saveLocalData(mg)}catch(er){console.error("[SYNC] migrate err:",er)}}}hrr.current=true;}
-      else{console.log("[SYNC] No doc - creating first copy");var cur=loadLocalData(),cs=JSON.stringify(cur);lsj.current=cs;hrr.current=true;dr.set({payload:cur,updatedAt:Date.now()}).catch(function(e){console.error("[SYNC] create err:",e)})}
-    },function(err){console.error("[SYNC] listen err:",err);hrr.current=true});
-    return function(){unsub()}
-  },[uSync,au]);
+  var useSync = isFirebaseConfigured();
 
-  // Push to cloud
-  UE(function(){if(!data)return;saveLocalData(data);if(!uSync||!au)return;if(!hrr.current)return;var cs=JSON.stringify(data);if(cs===lsj.current)return;if(wt.current)clearTimeout(wt.current);
-    wt.current=setTimeout(function(){var db=getFirestoreDb();if(!db)return;var dr=db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);lsj.current=cs;dr.set({payload:data,updatedAt:Date.now()}).catch(function(e){console.error("[SYNC] write err:",e)})},600)
-  },[data,uSync,au]);
+  var authState = useState(null);
+  var authUser = authState[0];
+  var setAuthUser = authState[1];
 
-  function setData(fn){setDataState(function(p){var next=typeof fn==="function"?fn(p):fn;if(next&&typeof next==="object")next.updatedAt=Date.now();return next})}
+  var dataState = useState(null);
+  var data = dataState[0];
+  var setDataState = dataState[1];
 
-  if(!ready||!data||(uSync&&!au&&!hrr.current))return R.createElement("div",{style:{padding:"40px",textAlign:"center",fontSize:"18px"}},"Loading...");
-  if(uSync&&!au)return R.createElement(LoginScreen);
-  return R.createElement(App,{data:data,setData:setData,syncActive:uSync&&!!au});
+  var remoteState = useState("waiting");
+  var remoteStatus = remoteState[0];
+  var setRemoteStatus = remoteState[1];
+
+  var writeErrorState = useState(null);
+  var writeError = writeErrorState[0];
+  var setWriteError = writeErrorState[1];
+
+  var showLoginState = useState(false);
+  var showLogin = showLoginState[0];
+  var setShowLogin = showLoginState[1];
+
+  var lastSyncedJSON = useRef(null);
+  var writeTimer = useRef(null);
+  var hasReceivedRemote = useRef(false);
+
+  // Load local data immediately - the app always opens with this, no waiting.
+  useEffect(function () {
+    var loaded = loadLocalData();
+    setDataState(loaded);
+    if (!useSync) {
+      setReady(true);
+      hasReceivedRemote.current = true;
+    }
+  }, []);
+
+  useEffect(function () {
+    if (!useSync) return;
+    initFirebaseApp();
+    var unsub = firebase.auth().onAuthStateChanged(function (user) {
+      setAuthUser(user);
+      setReady(true);
+      if (user) { setShowLogin(false); console.log("[Sync] Signed in as:", user.email); }
+      else { console.log("[Sync] Not signed in."); }
+    });
+    return function () { unsub(); };
+  }, [useSync]);
+
+  // Live listener - only active when signed in. Until it fires once, nothing is uploaded,
+  // so signing in can never overwrite the cloud with a blank copy.
+  useEffect(function () {
+    if (!useSync || !authUser) return;
+
+    setRemoteStatus("waiting");
+    hasReceivedRemote.current = false;
+
+    var db = getFirestoreDb();
+    var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
+    console.log("[Sync] Listening for cloud data...");
+
+    var watchdog = setTimeout(function () {
+      setRemoteStatus(function (prev) {
+        if (prev === "waiting") {
+          console.warn("[Sync] Cloud did not answer in 12 seconds. Continuing on this device only.");
+          return "offline";
+        }
+        return prev;
+      });
+    }, 12000);
+
+    var unsub = docRef.onSnapshot(function (snap) {
+      try {
+        if (snap.exists) {
+          var remote = snap.data();
+          var remotePayload = remote && remote.payload ? remote.payload : null;
+
+          if (remotePayload) {
+            var remoteString = JSON.stringify(remotePayload);
+            if (remoteString !== lastSyncedJSON.current) {
+              var migrated = migrate(remotePayload);
+              lastSyncedJSON.current = JSON.stringify(migrated);
+              setDataState(migrated);
+              saveLocalData(migrated);
+            }
+          }
+          hasReceivedRemote.current = true;
+          console.log("[Sync] Cloud data received. Live sync is active.");
+          setRemoteStatus("online");
+          setWriteError(null);
+        } else {
+          var current = loadLocalData();
+          var currentString = JSON.stringify(current);
+          lastSyncedJSON.current = currentString;
+          hasReceivedRemote.current = true;
+          console.log("[Sync] No cloud data yet - uploading your local data as the first copy.");
+          setRemoteStatus("online");
+          docRef.set({ payload: current, updatedAt: Date.now() }).catch(function (err) {
+            console.error("[Sync] Could not create the cloud document:", err);
+            setWriteError(err && err.message ? err.message : "unknown error");
+          });
+        }
+      } catch (e) {
+        console.error("[Sync] Problem applying cloud data:", e);
+        hasReceivedRemote.current = true;
+        setRemoteStatus("online");
+      }
+    }, function (err) {
+      console.error("[Sync] Cloud listen error:", err);
+      setRemoteStatus("error");
+      setWriteError(err && err.message ? err.message : "unknown cloud error");
+    });
+
+    return function () {
+      clearTimeout(watchdog);
+      unsub();
+    };
+  }, [useSync, authUser]);
+
+  // Push local changes up (debounced, only when signed in and cloud has answered once).
+  useEffect(function () {
+    if (!data) return;
+
+    saveLocalData(data);
+
+    if (!useSync || !authUser) return;
+    if (!hasReceivedRemote.current) return;
+
+    var currentString = JSON.stringify(data);
+    if (currentString === lastSyncedJSON.current) return;
+
+    if (writeTimer.current) clearTimeout(writeTimer.current);
+
+    writeTimer.current = setTimeout(function () {
+      var db = getFirestoreDb();
+      var docRef = db.collection(SYNC_COLLECTION).doc(SYNC_DOC_ID);
+      docRef.set({ payload: data, updatedAt: Date.now() })
+        .then(function () { lastSyncedJSON.current = currentString; setWriteError(null); })
+        .catch(function (err) {
+          console.error("[Sync] Firestore write error:", err);
+          setWriteError(err && err.message ? err.message : "unknown error");
+        });
+    }, 600);
+  }, [data, useSync, authUser]);
+
+  function setData(updater) {
+    setDataState(function (prev) {
+      var next = typeof updater === "function" ? updater(prev) : updater;
+      if (next && typeof next === "object") {
+        next.updatedAt = Date.now();
+      }
+      return next;
+    });
+  }
+
+  function handleSignOut() {
+    if (!useSync) return;
+    if (writeTimer.current) clearTimeout(writeTimer.current);
+    firebase.auth().signOut().catch(function (e) { console.error("[Sync] Sign out error:", e); });
+  }
+
+  // The app ALWAYS opens with local data. No login wall, no cloud waiting screen.
+  if (!ready || !data) {
+    return React.createElement("div", { style: { padding: "40px", textAlign: "center", fontSize: "18px" } }, "Loading...");
+  }
+
+  if (useSync && showLogin && !authUser) {
+    return React.createElement(LoginScreen, { onBack: function () { setShowLogin(false); } });
+  }
+
+  var syncLabel;
+  if (!useSync || !authUser) { syncLabel = "Saved on this device only"; }
+  else if (remoteStatus === "online") { syncLabel = "Synced across devices"; }
+  else if (remoteStatus === "waiting") { syncLabel = "Connecting sync..."; }
+  else if (remoteStatus === "offline") { syncLabel = "Cloud not answering - this device only"; }
+  else { syncLabel = "Cloud error - this device only"; }
+
+  return React.createElement(App, {
+    data: data,
+    setData: setData,
+    syncActive: useSync && !!authUser && remoteStatus === "online",
+    syncLabel: syncLabel,
+    saveWarning: writeError,
+    onSignOut: (useSync && authUser) ? handleSignOut : null,
+    onSignIn: (useSync && !authUser) ? function () { setShowLogin(true); } : null
+  });
 }
-ReactDOM.render(React.createElement(SyncRoot),document.getElementById("root"));
+
+ReactDOM.render(React.createElement(SyncRoot), document.getElementById("root"));
+
 </script>
 </body>
 </html>
